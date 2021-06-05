@@ -10,14 +10,32 @@ import {
 } from "obsidian";
 
 interface MyPluginSettings {
-  mainColour: number;
-  backgroundColour: string;
+  mainColourHue: number;
+  mainColourSat: number;
+  backgroundColourHue: number;
+  backgroundColourSat: number;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  mainColour: "#1D2021",
-  backgroundColour: "rgb(254, 104, 37)",
+  mainColourHue: 100,
+  mainColourSat: 100,
+  backgroundColourHue: 10,
+  backgroundColourSat: 10,
 };
+
+/// Source: https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
+function hslToHex(h: number, s: number, l: number) {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color)
+      .toString(16)
+      .padStart(2, "0"); // convert to Hex and prefix "0" if needed
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
@@ -27,15 +45,11 @@ export default class MyPlugin extends Plugin {
 
     await this.loadSettings();
 
-    this.addRibbonIcon("dice", "Sample Plugin", () => {
-      new Notice("This is a notice!");
-    });
-
-    this.addStatusBarItem().setText("Status Bar Text");
+    this.addRibbonIcon("dice", "Adjacency Matrix", this.addImage);
 
     this.addCommand({
-      id: "add-image",
-      name: "Add Image",
+      id: "adjacency-matrix",
+      name: "Add image of adjacency matrix",
       callback: this.addImage,
     });
 
@@ -47,6 +61,7 @@ export default class MyPlugin extends Plugin {
   }
 
   // Functions
+
   convertDataURIToBinary(dataURI: string) {
     let base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
     let base64: string = dataURI.substring(base64Index);
@@ -86,13 +101,13 @@ export default class MyPlugin extends Plugin {
 
   addImage = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
-    
+
     const fileDataArr = [];
     for (let file of files) {
       const links = await this.app.metadataCache.getFileCache(file).links;
       if (links) {
         const noHeaderLinks = links.map((item) =>
-        item.link.replace(/#.+/g, "")
+          item.link.replace(/#.+/g, "")
         );
         fileDataArr.push([file.basename, noHeaderLinks]);
       } else {
@@ -100,7 +115,6 @@ export default class MyPlugin extends Plugin {
       }
     }
     const size = fileDataArr.length;
-    
     const scale = size < 300 ? 8 : 2;
 
     // Canvas setup
@@ -122,9 +136,9 @@ export default class MyPlugin extends Plugin {
         let cellColour: string;
 
         if (adj[i][j] === 0) {
-          cellColour = "#1D2021";
+          cellColour = `hsl(${this.settings.backgroundColourHue}, ${this.settings.backgroundColourSat}%, 50%)`;
         } else {
-          cellColour = `rgba(0, 245, 159, ${alpha})`;
+          cellColour = `hsla(${this.settings.mainColourHue}, ${this.settings.mainColourSat}%, 50%, ${alpha})`;
         }
 
         ctx.beginPath();
@@ -181,37 +195,108 @@ class SampleSettingTab extends PluginSettingTab {
 
   display(): void {
     let { containerEl } = this;
-
     containerEl.empty();
-
     containerEl.createEl("h2", {
-      text: "Settings for adjacency matric maker.",
+      text: "Settings for Adjacency Matrix Maker",
     });
+
+    // Main colour picker
+    const coloursDiv = containerEl.createDiv();
+    const mainColourDiv = coloursDiv.createDiv();
+    const mainColourPicker = mainColourDiv.createEl("input", { type: "color" });
+    mainColourDiv.createEl("p", {
+      text: "Main colour",
+    });
+    mainColourPicker.value = hslToHex(
+      this.plugin.settings.mainColourHue,
+      this.plugin.settings.mainColourSat,
+      50
+    );
+
+    // Background colour picker
+    const backgroundColourDiv = coloursDiv.createDiv();
+    const backgroundColourPicker = backgroundColourDiv.createEl("input", {
+      type: "color",
+    });
+    backgroundColourDiv.createEl("p", {
+      text: "Background colour",
+    });
+    backgroundColourPicker.value = hslToHex(
+      this.plugin.settings.backgroundColourHue,
+      this.plugin.settings.backgroundColourSat,
+      50
+    );
 
     new Setting(containerEl)
       .setName("Main colour hue")
-      .setDesc("Colour to use when two notes are linked")
+      .setDesc("Hue of the colour to use when two notes are linked")
       .addSlider((slider) =>
         slider
           .setLimits(0, 360, 1)
-          .setValue(this.plugin.settings.mainColour)
+          .setValue(this.plugin.settings.mainColourHue)
           .onChange((value) => {
-            this.plugin.settings.mainColour = value;
+            this.plugin.settings.mainColourHue = value;
             this.plugin.saveData(this.plugin.settings);
+            mainColourPicker.value = hslToHex(
+              value,
+              this.plugin.settings.mainColourSat,
+              50
+            );
           })
       );
 
     new Setting(containerEl)
-      .setName("Background Colour")
-      .setDesc("The colour to use in the background")
-      .addText((text) =>
-        text
-          .setPlaceholder("Enter your secret")
-          .setValue("")
-          .onChange(async (value) => {
-            console.log("Secret: " + value);
-            this.plugin.settings.backgroundColour = value;
-            await this.plugin.saveSettings();
+      .setName("Main colour saturation")
+      .setDesc("Saturation of the colour to use when two notes are linked")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.mainColourSat)
+          .onChange((value) => {
+            this.plugin.settings.mainColourSat = value;
+            this.plugin.saveData(this.plugin.settings);
+            mainColourPicker.value = hslToHex(
+              this.plugin.settings.mainColourHue,
+              value,
+              50
+            );
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Background colour hue")
+      .setDesc("Hue of the background colour")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.backgroundColourHue)
+          .onChange((value) => {
+            console.log(value);
+            this.plugin.settings.backgroundColourHue = value;
+            this.plugin.saveData(this.plugin.settings);
+            backgroundColourPicker.value = hslToHex(
+              value,
+              this.plugin.settings.backgroundColourSat,
+              50
+            );
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Background colour saturation")
+      .setDesc("Saturation of the background colour")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.backgroundColourSat)
+          .onChange((value) => {
+            this.plugin.settings.backgroundColourSat = value;
+            this.plugin.saveData(this.plugin.settings);
+            backgroundColourPicker.value = hslToHex(
+              this.plugin.settings.backgroundColourHue,
+              value,
+              50
+            );
           })
       );
   }

@@ -1,7 +1,7 @@
 {
-  "name": "obsidian-sample-plugin",
-  "version": "0.12.0",
-  "description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+  "name": "adjacency-matrix-maker",
+  "version": "0.12.4",
+  "description": "This plugin creates an image of an adjacency matrix of your vault",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",
