@@ -13,7 +13,7 @@ This graph conveys the same information as this adjacency matrix:
 
 ![](Assets/small-graph.png)
 
-![](Assets\small-adj.png)
+![](Assets/small-adj.png)
 
 ### Large Vault
 

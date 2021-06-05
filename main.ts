@@ -40,6 +40,44 @@ function hslToHex(h: number, s: number, l: number) {
   };
   return `#${f(0)}${f(8)}${f(4)}`;
 }
+// Functions
+
+function convertDataURIToBinary(dataURI: string) {
+  const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
+  const base64: string = dataURI.substring(base64Index);
+  const raw = window.atob(base64);
+  const rawLength = raw.length;
+  let array = new Uint8Array(new ArrayBuffer(rawLength));
+  for (let i = 0; i < rawLength; i++) {
+    array[i] = raw.charCodeAt(i);
+  }
+  return array;
+}
+
+function sumRows(array: number[][]) {
+  let result: number[] = [];
+  array.forEach((row, i) => {
+    row.reduce((a, b) => (result[i] = a + b));
+  });
+  return result;
+}
+
+function normalise(array: number[]) {
+  const max = Math.max(...array);
+  return array.map((x) => x / max);
+}
+
+function createAdjMatrix(linksArray) {
+  const adj: number[][] = [];
+  for (let i = 0; i < linksArray.length; i++) {
+    adj.push([]);
+    for (let j = 0; j < linksArray.length; j++) {
+      // If note i links to note j, adj[i][j] = 1
+      adj[i][j] = linksArray[i][1].includes(linksArray[j][0]) ? 1 : 0;
+    }
+  }
+  return adj;
+}
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
@@ -64,48 +102,9 @@ export default class MyPlugin extends Plugin {
     });
   }
 
-  // Functions
-
-  convertDataURIToBinary(dataURI: string) {
-    let base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
-    let base64: string = dataURI.substring(base64Index);
-    let raw = window.atob(base64);
-    let rawLength = raw.length;
-    let array = new Uint8Array(new ArrayBuffer(rawLength));
-    for (let i = 0; i < rawLength; i++) {
-      array[i] = raw.charCodeAt(i);
-    }
-    return array;
-  }
-
-  sumRows(array: number[][]) {
-    let result: number[] = [];
-    array.forEach((row, i) => {
-      row.reduce((a, b) => (result[i] = a + b));
-    });
-    return result;
-  }
-
-  normalise(array: number[]) {
-    const max = Math.max(...array);
-    return array.map((x) => x / max);
-  }
-
-  createAdjMatrix(linksArray) {
-    const adj: number[][] = [];
-    for (let i = 0; i < linksArray.length; i++) {
-      adj.push([]);
-      for (let j = 0; j < linksArray.length; j++) {
-        // If note i links to note j, adj[i][j] = 1
-        adj[i][j] = linksArray[i][1].includes(linksArray[j][0]) ? 1 : 0;
-      }
-    }
-    return adj;
-  }
-
   addImage = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
-
+    console.log(files);
     const fileDataArr = [];
     for (let file of files) {
       const links = await this.app.metadataCache.getFileCache(file).links;
@@ -119,16 +118,17 @@ export default class MyPlugin extends Plugin {
       }
     }
     const size = fileDataArr.length;
-    const scale = size < 300 ? 8 : 2;
+    const scale = size < 300 ? 8 : 4;
 
     // Canvas setup
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     canvas.width = size * scale;
     canvas.height = size * scale;
+    ctx.font = '15px sans-serif';
 
-    const adj = this.createAdjMatrix(fileDataArr);
-    const normalisedRowSums = this.normalise(this.sumRows(adj));
+    const adj = createAdjMatrix(fileDataArr);
+    const normalisedRowSums = normalise(sumRows(adj));
 
     for (let i = 0; i < size; i++) {
       const alpha = normalisedRowSums[i] / 1.5 + 0.33333333;
@@ -139,24 +139,44 @@ export default class MyPlugin extends Plugin {
         const y = i * scale;
         let cellColour: string;
 
+        // Change colour if the two notes are linked
         if (adj[i][j] === 0) {
           cellColour = `hsl(${this.settings.backgroundColourHue}, ${this.settings.backgroundColourSat}%, ${this.settings.backgroundColourLight}%)`;
         } else {
           cellColour = `hsla(${this.settings.mainColourHue}, ${this.settings.mainColourSat}%, ${this.settings.mainColourLight}%, ${alpha})`;
         }
 
+        // Draw the cell
         ctx.beginPath();
         ctx.fillStyle = cellColour;
         ctx.fillRect(x, y, scale, scale);
       }
     }
 
+    function handleCanvasInteraction(e: MouseEvent) {
+      const ctx = this.getContext("2d");
+
+      const x = e.offsetX;
+      const y = e.offsetY;
+      const i = Math.round((x / scale) - 0.5);
+      const j = Math.round((y / scale) - 0.5);
+      const noteI = files[i].basename;
+      const noteJ = files[j].basename;
+      // Can't seem to get this right...
+      // Say scale = 4, then any
+      console.log(`x: ${i}, y: ${j}`);
+      console.log(`${noteJ} -> ${noteI}`);
+    }
+
+    canvas.addEventListener("click", handleCanvasInteraction);
+
     let image = new Image();
     image.src = canvas.toDataURL();
-    const arrBuff = this.convertDataURIToBinary(image.src);
+    const arrBuff = convertDataURIToBinary(image.src);
+
+    new SampleModal(this.app, canvas).open();
 
     const now = window.moment().format("YYYYMMDDHHmmSS");
-
     this.app.vault.createBinary(`/adj ${now}.png`, arrBuff);
   };
 
@@ -174,13 +194,16 @@ export default class MyPlugin extends Plugin {
 }
 
 class SampleModal extends Modal {
-  constructor(app: App) {
+  private canvas: HTMLCanvasElement;
+  constructor(app: App, canvas: HTMLCanvasElement) {
     super(app);
+    this.canvas = canvas;
   }
 
   onOpen() {
     let { contentEl } = this;
-    contentEl.setText("Woah!");
+    contentEl.appendChild(this.canvas);
+    console.log(this.canvas);
   }
 
   onClose() {
