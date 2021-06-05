@@ -12,15 +12,19 @@ import {
 interface MyPluginSettings {
   mainColourHue: number;
   mainColourSat: number;
+  mainColourLight: number;
   backgroundColourHue: number;
   backgroundColourSat: number;
+  backgroundColourLight: number;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
   mainColourHue: 100,
   mainColourSat: 100,
+  mainColourLight: 50,
   backgroundColourHue: 10,
   backgroundColourSat: 10,
+  backgroundColourLight: 50,
 };
 
 /// Source: https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
@@ -136,9 +140,9 @@ export default class MyPlugin extends Plugin {
         let cellColour: string;
 
         if (adj[i][j] === 0) {
-          cellColour = `hsl(${this.settings.backgroundColourHue}, ${this.settings.backgroundColourSat}%, 50%)`;
+          cellColour = `hsl(${this.settings.backgroundColourHue}, ${this.settings.backgroundColourSat}%, ${this.settings.backgroundColourLight}%)`;
         } else {
-          cellColour = `hsla(${this.settings.mainColourHue}, ${this.settings.mainColourSat}%, 50%, ${alpha})`;
+          cellColour = `hsla(${this.settings.mainColourHue}, ${this.settings.mainColourSat}%, ${this.settings.mainColourLight}%, ${alpha})`;
         }
 
         ctx.beginPath();
@@ -210,7 +214,7 @@ class SampleSettingTab extends PluginSettingTab {
     mainColourPicker.value = hslToHex(
       this.plugin.settings.mainColourHue,
       this.plugin.settings.mainColourSat,
-      50
+      this.plugin.settings.mainColourLight
     );
 
     // Background colour picker
@@ -224,7 +228,7 @@ class SampleSettingTab extends PluginSettingTab {
     backgroundColourPicker.value = hslToHex(
       this.plugin.settings.backgroundColourHue,
       this.plugin.settings.backgroundColourSat,
-      50
+      this.plugin.settings.backgroundColourLight
     );
 
     new Setting(containerEl)
@@ -240,7 +244,7 @@ class SampleSettingTab extends PluginSettingTab {
             mainColourPicker.value = hslToHex(
               value,
               this.plugin.settings.mainColourSat,
-              50
+              this.plugin.settings.mainColourLight
             );
           })
       );
@@ -258,7 +262,25 @@ class SampleSettingTab extends PluginSettingTab {
             mainColourPicker.value = hslToHex(
               this.plugin.settings.mainColourHue,
               value,
-              50
+              this.plugin.settings.mainColourLight
+            );
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Main colour light")
+      .setDesc("Light of the colour to use when two notes are linked")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.mainColourLight)
+          .onChange((value) => {
+            this.plugin.settings.mainColourLight = value;
+            this.plugin.saveData(this.plugin.settings);
+            mainColourPicker.value = hslToHex(
+              this.plugin.settings.mainColourHue,
+              this.plugin.settings.mainColourSat,
+              value
             );
           })
       );
@@ -277,7 +299,7 @@ class SampleSettingTab extends PluginSettingTab {
             backgroundColourPicker.value = hslToHex(
               value,
               this.plugin.settings.backgroundColourSat,
-              50
+              this.plugin.settings.backgroundColourLight
             );
           })
       );
@@ -295,7 +317,25 @@ class SampleSettingTab extends PluginSettingTab {
             backgroundColourPicker.value = hslToHex(
               this.plugin.settings.backgroundColourHue,
               value,
-              50
+              this.plugin.settings.backgroundColourLight
+            );
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Background colour light")
+      .setDesc("Light of the background colour")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.backgroundColourLight)
+          .onChange((value) => {
+            this.plugin.settings.backgroundColourLight = value;
+            this.plugin.saveData(this.plugin.settings);
+            backgroundColourPicker.value = hslToHex(
+              this.plugin.settings.backgroundColourHue,
+              this.plugin.settings.backgroundColourSat,
+              value
             );
           })
       );
