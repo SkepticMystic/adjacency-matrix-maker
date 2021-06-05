@@ -1,3 +1,4 @@
+import { settings } from "cluster";
 import {
   App,
   Modal,
@@ -9,18 +10,20 @@ import {
 } from "obsidian";
 
 interface MyPluginSettings {
-  mySetting: string;
+  mainColour: number;
+  backgroundColour: string;
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  mySetting: "default",
+  mainColour: "#1D2021",
+  backgroundColour: "rgb(254, 104, 37)",
 };
 
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
   async onload() {
-    console.log("loading plugin");
+    console.log("loading adjacency matrix maker plugin");
 
     await this.loadSettings();
 
@@ -81,23 +84,24 @@ export default class MyPlugin extends Plugin {
     return adj;
   }
 
-  addImage = async (scale = 1) => {
+  addImage = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
-
+    
     const fileDataArr = [];
-    for(let file of files) {
+    for (let file of files) {
       const links = await this.app.metadataCache.getFileCache(file).links;
       if (links) {
         const noHeaderLinks = links.map((item) =>
-          item.link.replace(/#.+/g, "")
+        item.link.replace(/#.+/g, "")
         );
         fileDataArr.push([file.basename, noHeaderLinks]);
       } else {
         fileDataArr.push([file.basename, []]);
       }
-    };
+    }
     const size = fileDataArr.length;
-    // console.log(size);
+    
+    const scale = size < 300 ? 8 : 2;
 
     // Canvas setup
     const canvas = document.createElement("canvas");
@@ -120,7 +124,7 @@ export default class MyPlugin extends Plugin {
         if (adj[i][j] === 0) {
           cellColour = "#1D2021";
         } else {
-          cellColour = `rgba(254, 104, 37, ${alpha})`;
+          cellColour = `rgba(0, 245, 159, ${alpha})`;
         }
 
         ctx.beginPath();
@@ -135,10 +139,7 @@ export default class MyPlugin extends Plugin {
 
     const now = window.moment().format("YYYYMMDDHHmmSS");
 
-    this.app.vault.createBinary(
-      `/adj ${now}.png`,
-      arrBuff
-    );
+    this.app.vault.createBinary(`/adj ${now}.png`, arrBuff);
   };
 
   onunload() {
@@ -183,18 +184,33 @@ class SampleSettingTab extends PluginSettingTab {
 
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Settings for my awesome plugin." });
+    containerEl.createEl("h2", {
+      text: "Settings for adjacency matric maker.",
+    });
 
     new Setting(containerEl)
-      .setName("Setting #1")
-      .setDesc("It's a secret")
+      .setName("Main colour hue")
+      .setDesc("Colour to use when two notes are linked")
+      .addSlider((slider) =>
+        slider
+          .setLimits(0, 360, 1)
+          .setValue(this.plugin.settings.mainColour)
+          .onChange((value) => {
+            this.plugin.settings.mainColour = value;
+            this.plugin.saveData(this.plugin.settings);
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Background Colour")
+      .setDesc("The colour to use in the background")
       .addText((text) =>
         text
           .setPlaceholder("Enter your secret")
           .setValue("")
           .onChange(async (value) => {
             console.log("Secret: " + value);
-            this.plugin.settings.mySetting = value;
+            this.plugin.settings.backgroundColour = value;
             await this.plugin.saveSettings();
           })
       );
