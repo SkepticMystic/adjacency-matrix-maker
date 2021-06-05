@@ -1,14 +1,11 @@
-import { settings } from "cluster";
 import {
   App,
   Modal,
-  Notice,
   Plugin,
   PluginSettingTab,
   Setting,
   TFile,
 } from "obsidian";
-
 interface MyPluginSettings {
   mainColourHue: number;
   mainColourSat: number;
@@ -165,7 +162,9 @@ export default class MyPlugin extends Plugin {
       // Can't seem to get this right...
       // Say scale = 4, then any
       console.log(`x: ${i}, y: ${j}`);
-      console.log(`${noteJ} -> ${noteI}`);
+      console.log(`${noteJ} > ${noteI}`);
+      ctx.fillStyle = "#eeeeee";
+      ctx.fillText(`${noteJ} > ${noteI}`, x - 10, y - 10)
     }
 
     canvas.addEventListener("click", handleCanvasInteraction);
@@ -202,8 +201,8 @@ class SampleModal extends Modal {
 
   onOpen() {
     let { contentEl } = this;
-    contentEl.appendChild(this.canvas);
-    console.log(this.canvas);
+    const canvas = this.canvas;
+    contentEl.appendChild(canvas);
   }
 
   onClose() {
