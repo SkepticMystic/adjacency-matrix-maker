@@ -7,8 +7,17 @@ div.adj-tooltip {
   border-radius : 5px;
   padding: 5px;
   background-color: rgb(20, 91, 109);
+  opacity: 0;
+}
+
+div.adj-tooltip.show {
+  opacity: 1;
 }
 
 div.adj-tooltip-text {
   opacity: 1;
+}
+
+div.matrixModalButtons {
+  /* margin: 10px; */
 }

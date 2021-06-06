@@ -30,8 +30,8 @@ function hslToHex(h: number, s: number, l: number) {
   };
   return `#${f(0)}${f(8)}${f(4)}`;
 }
-// Functions
 
+// Functions
 function convertDataURIToBinary(dataURI: string) {
   const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
   const base64: string = dataURI.substring(base64Index);
@@ -95,10 +95,10 @@ export default class MyPlugin extends Plugin {
 
   addImage = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
-    console.log(files);
+
     const fileDataArr = [];
     for (let file of files) {
-      const links = await this.app.metadataCache.getFileCache(file).links;
+      const links = this.app.metadataCache.getFileCache(file).links;
       if (links) {
         const noHeaderLinks = links.map((item) =>
           item.link.replace(/#.+/g, "")
@@ -121,6 +121,7 @@ export default class MyPlugin extends Plugin {
     const adj = createAdjMatrix(fileDataArr);
     const normalisedRowSums = normalise(sumRows(adj));
 
+    // This for loop colours each cell
     for (let i = 0; i < size; i++) {
       const alpha = normalisedRowSums[i] / 1.5 + 0.33333333;
 
@@ -144,14 +145,7 @@ export default class MyPlugin extends Plugin {
       }
     }
 
-    let image = new Image();
-    image.src = canvas.toDataURL();
-    const arrBuff = convertDataURIToBinary(image.src);
-
     new MatrixModal(this.app, canvas, files, scale).open();
-
-    const now = window.moment().format("YYYYMMDDHHmmSS");
-    this.app.vault.createBinary(`/adj ${now}.png`, arrBuff);
   };
 
   onunload() {
@@ -185,43 +179,69 @@ class MatrixModal extends Modal {
   }
 
   onOpen() {
-
+    const app = this.app;
     const scale = this.scale;
     const files = this.files;
-    // function handleEnter(e: MouseEvent) {
-    //   const tooltip = this.querySelector(".adj-tooltip");
-    //   tooltip.addClass("test");
-    //   tooltip.style.transform = `translate(${e.offsetX}px, ${e.offsetY}px)`;
-    // }
 
     let { contentEl } = this;
     const canvas = this.canvas;
     contentEl.appendChild(canvas);
 
+    const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
+    const saveImageButton = buttonRow.createEl("button", {
+      text: "Save Image",
+    });
+
     // Tooltip
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
+    function linkedQ(from: TFile, to: TFile) {
+      const fromLinkObjs = app.metadataCache.getFileCache(from).links || [];
+      const fromLinks = fromLinkObjs.map(
+        (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
+      );
+      if (fromLinks.includes(to.basename)) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+    // I should debounce this mousemove callback
     function handleCanvasInteraction(e: MouseEvent) {
-      const x = e.offsetX;
-      const y = e.offsetY;
-      // console.log(e);
       const tooltip = this.querySelector(".adj-tooltip");
       const tooltipText = tooltip.querySelector(".adj-tooltip-text");
-      // console.log(scale);
+
+      // Convert coord to file number
+      const x = e.offsetX;
+      const y = e.offsetY;
       const i = Math.round(x / scale - 0.5);
       const j = Math.round(y / scale - 0.5);
+      const fileI = files[i];
+      const fileJ = files[j];
+      // If hovering over linked notes, show tooltip, and move it there
+      if (linkedQ(fileJ, fileI)) {
+        tooltip.addClass("show");
+        tooltip.style.transform = `translate(${x}px, ${
+          y - canvas.height - 70
+        }px)`;
+        tooltipText.innerText = `${fileJ.basename} → ${fileI.basename}`;
+      } else {
+        tooltip.removeClass("show");
+      }
+    }
 
-      tooltip.style.transform = `translate(${x}px, ${y - canvas.height}px)`;
-      // console.log(tooltipText.innerText);
-      
-      const noteI = files[i].basename;
-      const noteJ = files[j].basename;
+    function saveCanvasAsImage() {
+      let image = new Image();
+      image.src = canvas.toDataURL();
+      const arrBuff = convertDataURIToBinary(image.src);
 
-      tooltipText.innerText = `${noteJ} → ${noteI}`;
+      const now = window.moment().format("YYYYMMDDHHmmSS");
+      app.vault.createBinary(`/adj ${now}.png`, arrBuff);
     }
 
     contentEl.addEventListener("mousemove", handleCanvasInteraction);
+    saveImageButton.addEventListener("click", saveCanvasAsImage);
   }
 
   onClose() {
