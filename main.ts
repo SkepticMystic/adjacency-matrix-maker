@@ -1,11 +1,4 @@
-import {
-  App,
-  Modal,
-  Plugin,
-  PluginSettingTab,
-  Setting,
-  TFile,
-} from "obsidian";
+import { App, Modal, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
 interface MyPluginSettings {
   mainColourHue: number;
   mainColourSat: number;
@@ -71,6 +64,7 @@ function createAdjMatrix(linksArray) {
     for (let j = 0; j < linksArray.length; j++) {
       // If note i links to note j, adj[i][j] = 1
       adj[i][j] = linksArray[i][1].includes(linksArray[j][0]) ? 1 : 0;
+      // #TODO:10 ### Write a linkedQ function
     }
   }
   return adj;
@@ -122,7 +116,7 @@ export default class MyPlugin extends Plugin {
     const ctx = canvas.getContext("2d");
     canvas.width = size * scale;
     canvas.height = size * scale;
-    ctx.font = '15px sans-serif';
+    ctx.font = "15px sans-serif";
 
     const adj = createAdjMatrix(fileDataArr);
     const normalisedRowSums = normalise(sumRows(adj));
@@ -150,30 +144,11 @@ export default class MyPlugin extends Plugin {
       }
     }
 
-    function handleCanvasInteraction(e: MouseEvent) {
-      const ctx = this.getContext("2d");
-
-      const x = e.offsetX;
-      const y = e.offsetY;
-      const i = Math.round((x / scale) - 0.5);
-      const j = Math.round((y / scale) - 0.5);
-      const noteI = files[i].basename;
-      const noteJ = files[j].basename;
-      // Can't seem to get this right...
-      // Say scale = 4, then any
-      console.log(`x: ${i}, y: ${j}`);
-      console.log(`${noteJ} > ${noteI}`);
-      ctx.fillStyle = "#eeeeee";
-      ctx.fillText(`${noteJ} > ${noteI}`, x - 10, y - 10)
-    }
-
-    canvas.addEventListener("click", handleCanvasInteraction);
-
     let image = new Image();
     image.src = canvas.toDataURL();
     const arrBuff = convertDataURIToBinary(image.src);
 
-    new SampleModal(this.app, canvas).open();
+    new MatrixModal(this.app, canvas, files, scale).open();
 
     const now = window.moment().format("YYYYMMDDHHmmSS");
     this.app.vault.createBinary(`/adj ${now}.png`, arrBuff);
@@ -192,17 +167,61 @@ export default class MyPlugin extends Plugin {
   }
 }
 
-class SampleModal extends Modal {
+class MatrixModal extends Modal {
   private canvas: HTMLCanvasElement;
-  constructor(app: App, canvas: HTMLCanvasElement) {
+  private files: TFile[];
+  private scale: number;
+
+  constructor(
+    app: App,
+    canvas: HTMLCanvasElement,
+    files: TFile[],
+    scale: number
+  ) {
     super(app);
     this.canvas = canvas;
+    this.files = files;
+    this.scale = scale;
   }
 
   onOpen() {
+
+    const scale = this.scale;
+    const files = this.files;
+    // function handleEnter(e: MouseEvent) {
+    //   const tooltip = this.querySelector(".adj-tooltip");
+    //   tooltip.addClass("test");
+    //   tooltip.style.transform = `translate(${e.offsetX}px, ${e.offsetY}px)`;
+    // }
+
     let { contentEl } = this;
     const canvas = this.canvas;
     contentEl.appendChild(canvas);
+
+    // Tooltip
+    const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
+    const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
+
+    function handleCanvasInteraction(e: MouseEvent) {
+      const x = e.offsetX;
+      const y = e.offsetY;
+      // console.log(e);
+      const tooltip = this.querySelector(".adj-tooltip");
+      const tooltipText = tooltip.querySelector(".adj-tooltip-text");
+      // console.log(scale);
+      const i = Math.round(x / scale - 0.5);
+      const j = Math.round(y / scale - 0.5);
+
+      tooltip.style.transform = `translate(${x}px, ${y - canvas.height}px)`;
+      // console.log(tooltipText.innerText);
+      
+      const noteI = files[i].basename;
+      const noteJ = files[j].basename;
+
+      tooltipText.innerText = `${noteJ} → ${noteI}`;
+    }
+
+    contentEl.addEventListener("mousemove", handleCanvasInteraction);
   }
 
   onClose() {
