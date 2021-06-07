@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
   backgroundColourLight: 50,
 };
 
+// Functions
 /// Source: https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
 function hslToHex(h: number, s: number, l: number) {
   l /= 100;
@@ -39,7 +40,6 @@ function hslToHex(h: number, s: number, l: number) {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-// Functions
 function convertDataURIToBinary(dataURI: string) {
   const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
   const base64: string = dataURI.substring(base64Index);
@@ -93,11 +93,7 @@ export default class MyPlugin extends Plugin {
     const fromLinks = fromLinkObjs.map(
       (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
     );
-    if (fromLinks.includes(to.basename)) {
-      return true;
-    } else {
-      return false;
-    }
+    return fromLinks.includes(to.basename) ? true : false;
   }
 
   createAdjMatrix(files: TFile[]) {
@@ -107,7 +103,6 @@ export default class MyPlugin extends Plugin {
     for (let i = 0; i < size; i++) {
       adj.push([]);
       for (let j = 0; j < size; j++) {
-        // If note i links to note j, adj[i][j] = 1
         adj[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
@@ -124,7 +119,6 @@ export default class MyPlugin extends Plugin {
     const ctx = canvas.getContext("2d");
     canvas.width = size * scale;
     canvas.height = size * scale;
-    ctx.font = "15px sans-serif";
 
     const adj = this.createAdjMatrix(files);
     const normalisedRowSums = normalise(sumRows(adj));
@@ -141,9 +135,15 @@ export default class MyPlugin extends Plugin {
 
         // Change colour if the two notes are linked
         if (adj[i][j] === 0) {
-          cellColour = `hsl(${this.settings.backgroundColourHue}, ${this.settings.backgroundColourSat}%, ${this.settings.backgroundColourLight}%)`;
+          const bgH = this.settings.backgroundColourHue;
+          const bgS = this.settings.backgroundColourSat;
+          const bgL = this.settings.backgroundColourLight;
+          cellColour = `hsl(${bgH}, ${bgS}%, ${bgL}%)`;
         } else {
-          cellColour = `hsla(${this.settings.mainColourHue}, ${this.settings.mainColourSat}%, ${this.settings.mainColourLight}%, ${alpha})`;
+          const mnH = this.settings.mainColourHue;
+          const mnS = this.settings.mainColourSat;
+          const mnL = this.settings.mainColourLight;
+          cellColour = `hsla(${mnH}, ${mnS}%, ${mnL}%, ${alpha})`;
         }
 
         // Draw the cell
@@ -216,7 +216,6 @@ class MatrixModal extends Modal {
       return fromLinks.includes(to.basename) ? true : false;
     }
 
-    // I should debounce this mousemove callback
     function handleCanvasInteraction(e: MouseEvent) {
       const tooltip = this.querySelector(".adj-tooltip");
       const tooltipText = tooltip.querySelector(".adj-tooltip-text");
@@ -228,12 +227,11 @@ class MatrixModal extends Modal {
       const j = Math.round(y / scale - 0.5);
       const fileI = files[i];
       const fileJ = files[j];
+
       // If hovering over linked notes, show tooltip, and move it there
       if (linkedQ(fileJ, fileI)) {
         tooltip.addClass("show");
-        tooltip.style.transform = `translate(${x + 15}px, ${
-          y - canvas.height - 80
-        }px)`;
+        tooltip.style.transform = `translate(${x + 15}px, ${y - canvas.height - 80}px)`;
         tooltipText.innerText = `${fileJ.basename} → ${fileI.basename}`;
       } else {
         tooltip.removeClass("show");
