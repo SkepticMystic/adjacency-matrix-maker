@@ -1,4 +1,12 @@
-import { App, Modal, Plugin, PluginSettingTab, Setting, TFile } from "obsidian";
+import {
+  App,
+  debounce,
+  Modal,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  TFile,
+} from "obsidian";
 interface MyPluginSettings {
   mainColourHue: number;
   mainColourSat: number;
@@ -57,19 +65,6 @@ function normalise(array: number[]) {
   return array.map((x) => x / max);
 }
 
-function createAdjMatrix(linksArray) {
-  const adj: number[][] = [];
-  for (let i = 0; i < linksArray.length; i++) {
-    adj.push([]);
-    for (let j = 0; j < linksArray.length; j++) {
-      // If note i links to note j, adj[i][j] = 1
-      adj[i][j] = linksArray[i][1].includes(linksArray[j][0]) ? 1 : 0;
-      // #TODO:10 ### Write a linkedQ function
-    }
-  }
-  return adj;
-}
-
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
@@ -93,22 +88,35 @@ export default class MyPlugin extends Plugin {
     });
   }
 
-  addImage = async () => {
-    const files: TFile[] = this.app.vault.getMarkdownFiles();
+  linkedQ(from: TFile, to: TFile) {
+    const fromLinkObjs = this.app.metadataCache.getFileCache(from).links || [];
+    const fromLinks = fromLinkObjs.map(
+      (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
+    );
+    if (fromLinks.includes(to.basename)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 
-    const fileDataArr = [];
-    for (let file of files) {
-      const links = this.app.metadataCache.getFileCache(file).links;
-      if (links) {
-        const noHeaderLinks = links.map((item) =>
-          item.link.replace(/#.+/g, "")
-        );
-        fileDataArr.push([file.basename, noHeaderLinks]);
-      } else {
-        fileDataArr.push([file.basename, []]);
+  createAdjMatrix(files: TFile[]) {
+    const size = files.length;
+    const adj: number[][] = [];
+
+    for (let i = 0; i < size; i++) {
+      adj.push([]);
+      for (let j = 0; j < size; j++) {
+        // If note i links to note j, adj[i][j] = 1
+        adj[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
-    const size = fileDataArr.length;
+    return adj;
+  }
+
+  addImage = async () => {
+    const files: TFile[] = this.app.vault.getMarkdownFiles();
+    const size = files.length;
     const scale = size < 100 ? 32 : size < 200 ? 16 : size < 300 ? 8 : 4;
 
     // Canvas setup
@@ -118,7 +126,7 @@ export default class MyPlugin extends Plugin {
     canvas.height = size * scale;
     ctx.font = "15px sans-serif";
 
-    const adj = createAdjMatrix(fileDataArr);
+    const adj = this.createAdjMatrix(files);
     const normalisedRowSums = normalise(sumRows(adj));
 
     // This for loop colours each cell
@@ -183,32 +191,31 @@ class MatrixModal extends Modal {
     const scale = this.scale;
     const files = this.files;
 
+    // Add the canvas to the modal
     let { contentEl } = this;
-    contentEl.addClass('contentEl');
+    contentEl.addClass("contentEl");
     const canvas = this.canvas;
     contentEl.appendChild(canvas);
 
+    // Save image button
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
     const saveImageButton = buttonRow.createEl("button", {
       text: "Save Image",
     });
 
     // Tooltip
+    /// TODO: The tooltip starts at the bottom left
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
-    tooltip.style.transform = `translate(${0}px, ${-canvas.height}px)`;
 
     function linkedQ(from: TFile, to: TFile) {
       const fromLinkObjs = app.metadataCache.getFileCache(from).links || [];
       const fromLinks = fromLinkObjs.map(
         (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
       );
-      if (fromLinks.includes(to.basename)) {
-        return true;
-      } else {
-        return false;
-      }
+      return fromLinks.includes(to.basename) ? true : false;
     }
+
     // I should debounce this mousemove callback
     function handleCanvasInteraction(e: MouseEvent) {
       const tooltip = this.querySelector(".adj-tooltip");
@@ -242,7 +249,10 @@ class MatrixModal extends Modal {
       app.vault.createBinary(`/adj ${now}.png`, arrBuff);
     }
 
-    contentEl.addEventListener("mousemove", handleCanvasInteraction);
+    contentEl.addEventListener(
+      "mousemove",
+      debounce(handleCanvasInteraction, 20, true)
+    );
     saveImageButton.addEventListener("click", saveCanvasAsImage);
   }
 
