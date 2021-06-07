@@ -12,3 +12,11 @@ main.js
 
 # obsidian
 data.json
+
+# imdone
+.imdone
+.imdoneignore
+imdone-tasks.md
+
+# Project
+linkedQ.ts
