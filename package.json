@@ -1,7 +1,7 @@
 {
   "name": "adjacency-matrix-maker",
-  "version": "0.12.4",
-  "description": "This plugin creates an image of an adjacency matrix of your vault",
+  "version": "0.1.2",
+  "description": "This plugin creates an interactive adjacency matrix of your vault",
   "main": "main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.js -w",

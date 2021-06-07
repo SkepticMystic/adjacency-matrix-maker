@@ -20,8 +20,8 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
   mainColourHue: 100,
   mainColourSat: 100,
   mainColourLight: 50,
-  backgroundColourHue: 10,
-  backgroundColourSat: 10,
+  backgroundColourHue: 30,
+  backgroundColourSat: 20,
   backgroundColourLight: 50,
 };
 
@@ -53,7 +53,7 @@ function convertDataURIToBinary(dataURI: string) {
 }
 
 function sumRows(array: number[][]) {
-  let result: number[] = [];
+  const result: number[] = [];
   array.forEach((row, i) => {
     row.reduce((a, b) => (result[i] = a + b));
   });
@@ -69,50 +69,52 @@ export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
   async onload() {
-    console.log("loading adjacency matrix maker plugin");
+    console.log("Loading Adjacency Matrix Maker plugin");
 
     await this.loadSettings();
 
-    this.addRibbonIcon("dice", "Adjacency Matrix", this.addImage);
+    this.addRibbonIcon("dice", "Adjacency Matrix", this.makeAdjacencyMatrix);
 
     this.addCommand({
       id: "adjacency-matrix",
-      name: "Add image of adjacency matrix",
-      callback: this.addImage,
+      name: "Open Adjacency Matrix",
+      callback: this.makeAdjacencyMatrix,
     });
 
-    this.addSettingTab(new SampleSettingTab(this.app, this));
+    this.addSettingTab(new AdjacencyMatrixMakerSettingTab(this.app, this));
 
     this.registerCodeMirror((cm: CodeMirror.Editor) => {
-      console.log("codemirror", cm);
+      // console.log("codemirror", cm);
     });
   }
 
+  // Does `from` have a link going to `to`?
   linkedQ(from: TFile, to: TFile) {
     const fromLinkObjs = this.app.metadataCache.getFileCache(from).links || [];
     const fromLinks = fromLinkObjs.map(
       (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
     );
-    return fromLinks.includes(to.basename) ? true : false;
+    return fromLinks.includes(to.basename);
   }
 
-  createAdjMatrix(files: TFile[]) {
+  populateAdjacencyMatrixArr(files: TFile[]) {
     const size = files.length;
     const adj: number[][] = [];
 
     for (let i = 0; i < size; i++) {
       adj.push([]);
       for (let j = 0; j < size; j++) {
+        // 1 or 0 so that sumRows works (instead of true or false)
         adj[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
     return adj;
   }
 
-  addImage = async () => {
+  makeAdjacencyMatrix = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
     const size = files.length;
-    const scale = size < 100 ? 32 : size < 200 ? 16 : size < 300 ? 8 : 4;
+    const scale = size < 50 ? 16 : size < 100 ? 8 : size < 200 ? 4 : 2;
 
     // Canvas setup
     const canvas = document.createElement("canvas");
@@ -120,11 +122,13 @@ export default class MyPlugin extends Plugin {
     canvas.width = size * scale;
     canvas.height = size * scale;
 
-    const adj = this.createAdjMatrix(files);
+    const adj = this.populateAdjacencyMatrixArr(files);
     const normalisedRowSums = normalise(sumRows(adj));
 
     // This for loop colours each cell
     for (let i = 0; i < size; i++) {
+      // Where the alpha of that row is proportional to the number of coloured cells in that row
+      /// Make the more "popular" notes pop
       const alpha = normalisedRowSums[i] / 1.5 + 0.33333333;
 
       for (let j = 0; j < size; j++) {
@@ -205,52 +209,59 @@ class MatrixModal extends Modal {
 
     // Tooltip
     /// TODO: The tooltip starts at the bottom left
+    /// I can't get the tooltip to show if I append it to the canvas itself, but I seem to have found a workaround
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
+    // The same linkedQ function from the MyPlugin class
     function linkedQ(from: TFile, to: TFile) {
       const fromLinkObjs = app.metadataCache.getFileCache(from).links || [];
       const fromLinks = fromLinkObjs.map(
         (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
       );
-      return fromLinks.includes(to.basename) ? true : false;
+      return fromLinks.includes(to.basename);
     }
 
     function handleCanvasInteraction(e: MouseEvent) {
-      const tooltip = this.querySelector(".adj-tooltip");
-      const tooltipText = tooltip.querySelector(".adj-tooltip-text");
+      let x = e.offsetX;
+      let y = e.offsetY;
 
-      // Convert coord to file number
-      const x = e.offsetX;
-      const y = e.offsetY;
+      // Convert coord to cell number
       const i = Math.round(x / scale - 0.5);
       const j = Math.round(y / scale - 0.5);
+      // Pick the two files that cell refers to
       const fileI = files[i];
       const fileJ = files[j];
 
       // If hovering over linked notes, show tooltip, and move it there
       if (linkedQ(fileJ, fileI)) {
         tooltip.addClass("show");
-        tooltip.style.transform = `translate(${x + 15}px, ${y - canvas.height - 80}px)`;
+        tooltip.style.transform = `translate(${x + 15}px, ${
+          y - canvas.height - 80
+        }px)`;
         tooltipText.innerText = `${fileJ.basename} → ${fileI.basename}`;
       } else {
+        // Hide the tooltip
         tooltip.removeClass("show");
       }
     }
+
+    canvas.addEventListener(
+      "mousemove",
+      debounce(handleCanvasInteraction, 20, true)
+    );
 
     function saveCanvasAsImage() {
       let image = new Image();
       image.src = canvas.toDataURL();
       const arrBuff = convertDataURIToBinary(image.src);
 
+      // Add the current datetime to the image name
       const now = window.moment().format("YYYYMMDDHHmmSS");
+      // Save image to root. This could be improved to let the user choose the path
       app.vault.createBinary(`/adj ${now}.png`, arrBuff);
     }
 
-    contentEl.addEventListener(
-      "mousemove",
-      debounce(handleCanvasInteraction, 20, true)
-    );
     saveImageButton.addEventListener("click", saveCanvasAsImage);
   }
 
@@ -260,7 +271,7 @@ class MatrixModal extends Modal {
   }
 }
 
-class SampleSettingTab extends PluginSettingTab {
+class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
   plugin: MyPlugin;
 
   constructor(app: App, plugin: MyPlugin) {
@@ -274,14 +285,19 @@ class SampleSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", {
       text: "Settings for Adjacency Matrix Maker",
     });
+    containerEl.createEl("p", {
+      text: "You currently can't use the colour pickers to actually choose the colours. It is just to show the result.",
+    });
+
+    const coloursDiv = containerEl.createDiv();
 
     // Main colour picker
-    const coloursDiv = containerEl.createDiv();
     const mainColourDiv = coloursDiv.createDiv();
-    const mainColourPicker = mainColourDiv.createEl("input", { type: "color" });
-    mainColourDiv.createEl("p", {
+    mainColourDiv.createEl("h4", {
       text: "Main colour",
     });
+    const mainColourPicker = mainColourDiv.createEl("input", { type: "color" });
+    // Update value based on chosen slider settings
     mainColourPicker.value = hslToHex(
       this.plugin.settings.mainColourHue,
       this.plugin.settings.mainColourSat,
@@ -290,11 +306,11 @@ class SampleSettingTab extends PluginSettingTab {
 
     // Background colour picker
     const backgroundColourDiv = coloursDiv.createDiv();
+    backgroundColourDiv.createEl("h4", {
+      text: "Background colour",
+    });
     const backgroundColourPicker = backgroundColourDiv.createEl("input", {
       type: "color",
-    });
-    backgroundColourDiv.createEl("p", {
-      text: "Background colour",
     });
     backgroundColourPicker.value = hslToHex(
       this.plugin.settings.backgroundColourHue,
@@ -361,7 +377,7 @@ class SampleSettingTab extends PluginSettingTab {
       .setDesc("Hue of the background colour")
       .addSlider((slider) =>
         slider
-          .setLimits(0, 100, 1)
+          .setLimits(0, 360, 1)
           .setValue(this.plugin.settings.backgroundColourHue)
           .onChange((value) => {
             console.log(value);

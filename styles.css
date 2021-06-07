@@ -1,13 +1,13 @@
 div.adj-tooltip {
-  transition: all 0.2s;
+  transition: all 0.15s;
   position: absolute;
   display: flex;
   width: fit-content;
   height: fit-content;
   border: 1px solid rgba(0, 0, 0, 0);
   border-radius : 5px;
-  padding: 5px;
-  background-color: rgb(20, 91, 109);
+  padding: 2px 5px;
+  background-color: var(--dark0, rgb(35, 40, 41));
   opacity: 0;
 }
 
@@ -15,10 +15,10 @@ div.adj-tooltip.show {
   opacity: 1;
 }
 
-div.adj-tooltip-text {
-  opacity: 1;
-}
+/* div.adj-tooltip-text {
+  
+} */
 
-div.matrixModalButtons {
-  justify-content: center;
-}
+/* div.matrixModalButtons {
+
+} */
