@@ -109,7 +109,7 @@ export default class MyPlugin extends Plugin {
       }
     }
     const size = fileDataArr.length;
-    const scale = size < 300 ? 8 : 4;
+    const scale = size < 100 ? 32 : size < 200 ? 16 : size < 300 ? 8 : 4;
 
     // Canvas setup
     const canvas = document.createElement("canvas");
@@ -184,6 +184,7 @@ class MatrixModal extends Modal {
     const files = this.files;
 
     let { contentEl } = this;
+    contentEl.addClass('contentEl');
     const canvas = this.canvas;
     contentEl.appendChild(canvas);
 
@@ -195,6 +196,7 @@ class MatrixModal extends Modal {
     // Tooltip
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
+    tooltip.style.transform = `translate(${0}px, ${-canvas.height}px)`;
 
     function linkedQ(from: TFile, to: TFile) {
       const fromLinkObjs = app.metadataCache.getFileCache(from).links || [];
@@ -222,8 +224,8 @@ class MatrixModal extends Modal {
       // If hovering over linked notes, show tooltip, and move it there
       if (linkedQ(fileJ, fileI)) {
         tooltip.addClass("show");
-        tooltip.style.transform = `translate(${x}px, ${
-          y - canvas.height - 70
+        tooltip.style.transform = `translate(${x + 15}px, ${
+          y - canvas.height - 80
         }px)`;
         tooltipText.innerText = `${fileJ.basename} → ${fileI.basename}`;
       } else {

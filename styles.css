@@ -1,4 +1,5 @@
 div.adj-tooltip {
+  transition: all 0.2s;
   position: absolute;
   display: flex;
   width: fit-content;
@@ -19,5 +20,5 @@ div.adj-tooltip-text {
 }
 
 div.matrixModalButtons {
-  /* margin: 10px; */
+  justify-content: center;
 }
