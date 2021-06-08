@@ -1,6 +1,6 @@
 {
   "name": "adjacency-matrix-maker",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "This plugin creates an interactive adjacency matrix of your vault",
   "main": "main.js",
   "scripts": {
