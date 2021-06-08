@@ -223,6 +223,8 @@ class MatrixModal extends Modal {
     this.colours = colours;
   }
 
+  interval: NodeJS.Timeout;
+
   onOpen() {
     const modal = this;
     const app = this.app;
@@ -230,7 +232,7 @@ class MatrixModal extends Modal {
     const scale = this.scale;
     const files = this.files;
     const adjArray = this.adjArray;
-    const colours = this.colours;
+    // const colours = this.colours;
 
     // Add the canvas to the modal
     let { contentEl } = this;
@@ -269,13 +271,12 @@ class MatrixModal extends Modal {
       over: false,
       buttons: [1, 2, 4, 6, 5, 3], // masks for setting and clearing button raw bits;
     };
+
+    
+
     function mouseMove(event: MouseEvent | WheelEvent) {
       mouse.x = event.offsetX;
       mouse.y = event.offsetY;
-      // if (mouse.x === undefined) {
-      //   mouse.x = event.clientX;
-      //   mouse.y = event.clientY;
-      // }
       // mouse.alt = event.altKey;
       // mouse.shift = event.shiftKey;
       // mouse.ctrl = event.ctrlKey;
@@ -466,16 +467,16 @@ class MatrixModal extends Modal {
     };
 
     function update() {
+      console.count("updating");
       // update the transform
       displayTransform.update();
       // set home transform to clear the screem
       displayTransform.setHome();
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       displayTransform.setTransform();
       ctx.drawImage(img, 0, 0);
-      ctx.fillStyle = "white";
+      // ctx.fillStyle = "white";
 
       if (mouse.buttonRaw === 4) {
         // right click to return to home
@@ -486,10 +487,9 @@ class MatrixModal extends Modal {
         displayTransform.ox = 0;
         displayTransform.oy = 0;
       }
-      // reaquest next frame
-      setTimeout(() => requestAnimationFrame(update), 20);
     }
-    update(); // start it happening
+    update();
+    this.interval = setInterval(update, 30);
 
     function handleCanvasInteraction(e: MouseEvent) {
       const x = e.offsetX;
@@ -522,7 +522,7 @@ class MatrixModal extends Modal {
 
     canvas.addEventListener(
       "mousemove",
-      debounce(handleCanvasInteraction, 20, true)
+      debounce(handleCanvasInteraction, 30, true)
     );
 
     async function openClickedCellAsFile(e: MouseEvent) {
@@ -557,8 +557,6 @@ class MatrixModal extends Modal {
     });
 
     function saveCanvasAsImage() {
-      // let image = new Image();
-      // image.src = canvas.toDataURL();
       const arrBuff = convertDataURIToBinary(img.src);
 
       // Add the current datetime to the image name
@@ -573,6 +571,7 @@ class MatrixModal extends Modal {
 
   onClose() {
     let { contentEl } = this;
+    clearInterval(this.interval);
     contentEl.empty();
   }
 }
