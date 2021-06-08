@@ -8,6 +8,8 @@ import {
   PluginSettingTab,
   Setting,
   TFile,
+  Workspace,
+  WorkspaceLeaf,
 } from "obsidian";
 interface MyPluginSettings {
   mainColourHue: number;
@@ -72,7 +74,9 @@ function drawAdj(
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
-  colours: number[]
+  colours: number[],
+  offsetX: number = 0,
+  offsetY: number = 0
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
@@ -80,15 +84,15 @@ function drawAdj(
   canvas.height = canvas.height;
   const [bgH, bgS, bgL, mnH, mnS, mnL] = colours;
 
-  for (let i = 0; i < size; i++) {
+  for (let i = offsetX; i < size; i++) {
     // Where the alpha of that row is proportional to the number of coloured cells in that row
     /// Make the more "popular" notes pop
     const alpha = alphas[i] / 1.5 + 0.33333333;
 
-    for (let j = 0; j < size; j++) {
+    for (let j = offsetY; j < size; j++) {
       // Position of the top-left corner of the next pixel
-      const x = j * scale;
-      const y = i * scale;
+      const x = i * scale;
+      const y = j * scale;
       let cellColour: string;
 
       // Change colour if the two notes are linked
@@ -174,8 +178,6 @@ export default class MyPlugin extends Plugin {
       this.settings.mainColourLight,
     ];
 
-    console.log(this.settings);
-
     drawAdj(scale, alphas, adjArray, canvas, colours);
 
     new MatrixModal(this.app, canvas, files, scale, adjArray, colours).open();
@@ -218,6 +220,7 @@ class MatrixModal extends Modal {
   }
 
   onOpen() {
+    const modal = this;
     const app = this.app;
     const scale = this.scale;
     const files = this.files;
@@ -270,12 +273,12 @@ class MatrixModal extends Modal {
       // console.log({i, j, size, linked: linkedQ(fileJ, fileI)});
 
       // If hovering over linked notes, show tooltip, and move it there
-      if (adjArray[j][i] === 1) {
+      if (adjArray[i][j] === 1) {
         tooltip.addClass("show");
         tooltip.style.transform = `translate(${x + 15}px, ${
           y - canvas.height - 80
         }px)`;
-        tooltipText.innerText = `${fileJ.basename} → ${fileI.basename}`;
+        tooltipText.innerText = `${fileI.basename} → ${fileJ.basename}`;
       } else {
         // Hide the tooltip
         tooltip.removeClass("show");
@@ -287,11 +290,45 @@ class MatrixModal extends Modal {
       debounce(handleCanvasInteraction, 20, true)
     );
 
-    canvas.addEventListener("wheel", function (event) {
-      newScale *= 1 + -event.deltaY / 100 / 2;
+    canvas.addEventListener("wheel", function (e) {
+      const ctx = canvas.getContext("2d");
       const alphas = normalise(sumRows(adjArray));
+
+      const x = e.offsetX;
+      const y = e.offsetY;
+
+      // Convert coord to cell number
+      const i = Math.round(x / newScale - 0.5);
+      const j = Math.round(y / newScale - 0.5);
+
+      newScale *= 1 + -e.deltaY / 100 / 2;
+
+      // ctx.translate(e.offsetX, e.offsetY);
       drawAdj(newScale, alphas, adjArray, canvas, colours);
+      // ctx.translate(-e.offsetX, -e.offsetY);
     });
+
+    async function openClickedCellAsFile(e: MouseEvent) {
+      const x = e.offsetX;
+      const y = e.offsetY;
+
+      // Convert coord to cell number
+      const i = Math.round(x / newScale - 0.5);
+      const j = Math.round(y / newScale - 0.5);
+
+      // Pick the two files that cell refers to
+      const fileI = files[i];
+      // const fileJ = files[j];
+
+      if (adjArray[i][j] === 1) {
+        // Open the clicked cell (from, not to) in the active leaf
+        await app.workspace.activeLeaf.openFile(fileI);
+
+        modal.close();
+      }
+    }
+
+    canvas.addEventListener("click", openClickedCellAsFile);
 
     resetScaleButton.addEventListener("click", () => {
       newScale = scale;
