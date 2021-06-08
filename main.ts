@@ -225,7 +225,7 @@ class MatrixModal extends Modal {
 
   interval: NodeJS.Timeout;
 
-  onOpen() {
+  async onOpen() {
     const modal = this;
     const app = this.app;
     const img = this.img;
@@ -241,7 +241,7 @@ class MatrixModal extends Modal {
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
+    await ctx.drawImage(img, 0, 0);
 
     // Save image button
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
