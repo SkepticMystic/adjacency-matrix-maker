@@ -69,7 +69,7 @@ function normalise(array: number[]) {
   return array.map((x) => x / max);
 }
 
-function drawAdj(
+function drawAdjAsImage(
   scale: number,
   alphas: number[],
   adjArray: number[][],
@@ -108,6 +108,9 @@ function drawAdj(
       ctx.fillRect(x, y, scale, scale);
     }
   }
+  const img = new Image();
+  img.src = canvas.toDataURL();
+  return img;
 }
 
 export default class MyPlugin extends Plugin {
@@ -178,9 +181,9 @@ export default class MyPlugin extends Plugin {
       this.settings.mainColourLight,
     ];
 
-    drawAdj(scale, alphas, adjArray, canvas, colours);
+    const img = drawAdjAsImage(scale, alphas, adjArray, canvas, colours);
 
-    new MatrixModal(this.app, canvas, files, scale, adjArray, colours).open();
+    new MatrixModal(this.app, img, files, scale, adjArray, colours).open();
   };
 
   onunload() {
@@ -197,7 +200,8 @@ export default class MyPlugin extends Plugin {
 }
 
 class MatrixModal extends Modal {
-  private canvas: HTMLCanvasElement;
+  private img: HTMLImageElement;
+  // private canvas: HTMLCanvasElement;
   private files: TFile[];
   private scale: number;
   private adjArray: number[][];
@@ -205,14 +209,14 @@ class MatrixModal extends Modal {
 
   constructor(
     app: App,
-    canvas: HTMLCanvasElement,
+    img: HTMLImageElement,
     files: TFile[],
     scale: number,
     adjArray: number[][],
     colours: number[]
   ) {
     super(app);
-    this.canvas = canvas;
+    this.img = img;
     this.files = files;
     this.scale = scale;
     this.adjArray = adjArray;
@@ -222,6 +226,7 @@ class MatrixModal extends Modal {
   onOpen() {
     const modal = this;
     const app = this.app;
+    const img = this.img;
     const scale = this.scale;
     const files = this.files;
     const adjArray = this.adjArray;
@@ -230,9 +235,11 @@ class MatrixModal extends Modal {
     // Add the canvas to the modal
     let { contentEl } = this;
     contentEl.addClass("contentEl");
-    const canvas = this.canvas;
+    const canvas = contentEl.createEl("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
     const ctx = canvas.getContext("2d");
-    contentEl.appendChild(canvas);
+    ctx.drawImage(img, 0, 0);
 
     // Save image button
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
@@ -247,39 +254,267 @@ class MatrixModal extends Modal {
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
-    // The same linkedQ function from the MyPlugin class
-    function linkedQ(from: TFile, to: TFile) {
-      const fromLinkObjs = app.metadataCache.getFileCache(from).links || [];
-      const fromLinks = fromLinkObjs.map(
-        (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
-      );
-      return fromLinks.includes(to.basename);
-    }
-
     let newScale = scale;
 
+    ////// Test code /////////
+    const mouse = {
+      x: 0,
+      y: 0,
+      w: 0,
+      alt: false,
+      shift: false,
+      ctrl: false,
+      buttonLastRaw: 0, // user modified value
+      buttonRaw: 0,
+      over: false,
+      buttons: [1, 2, 4, 6, 5, 3], // masks for setting and clearing button raw bits;
+    };
+    function mouseMove(event: MouseEvent | WheelEvent) {
+      mouse.x = event.offsetX;
+      mouse.y = event.offsetY;
+      // if (mouse.x === undefined) {
+      //   mouse.x = event.clientX;
+      //   mouse.y = event.clientY;
+      // }
+      // mouse.alt = event.altKey;
+      // mouse.shift = event.shiftKey;
+      // mouse.ctrl = event.ctrlKey;
+      if (event.type === "mousedown") {
+        event.preventDefault();
+        mouse.buttonRaw |= mouse.buttons[event.which - 1];
+      } else if (event.type === "mouseup") {
+        mouse.buttonRaw &= mouse.buttons[event.which + 2];
+      } else if (event.type === "mouseout") {
+        mouse.buttonRaw = 0;
+        mouse.over = false;
+      } else if (event.type === "mouseover") {
+        mouse.over = true;
+      } else if (event.type === "mousewheel") {
+        event.preventDefault();
+        mouse.w = -event.deltaY;
+      }
+      // else if (event.type === "DOMMouseScroll") {
+      //   // FF you pedantic doffus
+      //   mouse.w = -event.detail;
+      // }
+    }
+
+    function setupMouse(e: HTMLElement) {
+      e.addEventListener("mousemove", mouseMove);
+      e.addEventListener("mousedown", mouseMove);
+      e.addEventListener("mouseup", mouseMove);
+      e.addEventListener("mouseout", mouseMove);
+      e.addEventListener("mouseover", mouseMove);
+      e.addEventListener("mousewheel", mouseMove);
+      // e.addEventListener("DOMMouseScroll", mouseMove); // fire fox
+
+      e.addEventListener(
+        "contextmenu",
+        function (e) {
+          e.preventDefault();
+        },
+        false
+      );
+    }
+    setupMouse(canvas);
+
+    // Real space, real, r (prefix) refers to the transformed canvas space.
+    // c (prefix), chase is the value that chases a requiered value
+    var displayTransform = {
+      x: 0,
+      y: 0,
+      ox: 0,
+      oy: 0,
+      scale: 1,
+      rotate: 0,
+      cx: 0, // chase values Hold the actual display
+      cy: 0,
+      cox: 0,
+      coy: 0,
+      cscale: 1,
+      crotate: 0,
+      dx: 0, // deltat values
+      dy: 0,
+      dox: 0,
+      doy: 0,
+      dscale: 1,
+      drotate: 0,
+      drag: 0.2, // drag for movements
+      accel: 0.9, // acceleration
+      matrix: [0, 0, 0, 0, 0, 0], // main matrix
+      invMatrix: [0, 0, 0, 0, 0, 0], // invers matrix;
+      mouseX: 0,
+      mouseY: 0,
+      ctx: ctx,
+      setTransform: function () {
+        let m = this.matrix;
+        let i = 0;
+        this.ctx.setTransform(m[i++], m[i++], m[i++], m[i++], m[i++], m[i++]);
+      },
+      setHome: function () {
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+      },
+      update: function () {
+        // smooth all movement out. drag and accel control how this moves
+        // acceleration
+        this.dx += (this.x - this.cx) * this.accel;
+        this.dy += (this.y - this.cy) * this.accel;
+        this.dox += (this.ox - this.cox) * this.accel;
+        this.doy += (this.oy - this.coy) * this.accel;
+        this.dscale += (this.scale - this.cscale) * this.accel;
+        // this.drotate += (this.rotate - this.crotate) * this.accel;
+
+        // drag
+        this.dx *= this.drag;
+        this.dy *= this.drag;
+        this.dox *= this.drag;
+        this.doy *= this.drag;
+        this.dscale *= this.drag;
+        // this.drotate *= this.drag;
+
+        // set the chase values. Chase chases the requiered values
+        this.cx += this.dx;
+        this.cy += this.dy;
+        this.cox += this.dox;
+        this.coy += this.doy;
+        this.cscale += this.dscale;
+        // this.crotate += this.drotate;
+
+        // create the display matrix
+        this.matrix[0] = Math.cos(this.crotate) * this.cscale;
+        this.matrix[1] = Math.sin(this.crotate) * this.cscale;
+        this.matrix[2] = -this.matrix[1];
+        this.matrix[3] = this.matrix[0];
+
+        // set the coords relative to the origin
+        this.matrix[4] =
+          -(this.cx * this.matrix[0] + this.cy * this.matrix[2]) + this.cox;
+        this.matrix[5] =
+          -(this.cx * this.matrix[1] + this.cy * this.matrix[3]) + this.coy;
+
+        // create invers matrix
+        let det =
+          this.matrix[0] * this.matrix[3] - this.matrix[1] * this.matrix[2];
+        this.invMatrix[0] = this.matrix[3] / det;
+        this.invMatrix[1] = -this.matrix[1] / det;
+        this.invMatrix[2] = -this.matrix[2] / det;
+        this.invMatrix[3] = this.matrix[0] / det;
+
+        // check for mouse. Do controls and get real position of mouse.
+        if (mouse !== undefined) {
+          // if there is a mouse get the real cavas coordinates of the mouse
+          if (mouse.oldX !== undefined && (mouse.buttonRaw & 1) === 1) {
+            // check if panning (middle button)
+            var mdx = mouse.x - mouse.oldX; // get the mouse movement
+            var mdy = mouse.y - mouse.oldY;
+            // get the movement in real space
+            var mrx = mdx * this.invMatrix[0] + mdy * this.invMatrix[2];
+            var mry = mdx * this.invMatrix[1] + mdy * this.invMatrix[3];
+            this.x -= mrx;
+            this.y -= mry;
+          }
+          // do the zoom with mouse wheel
+          if (mouse.w !== undefined && mouse.w !== 0) {
+            this.ox = mouse.x;
+            this.oy = mouse.y;
+            this.x = this.mouseX;
+            this.y = this.mouseY;
+            /* Special note from answer */
+            // comment out the following is you change drag and accel
+            // and the zoom does not feel right (lagging and not
+            // zooming around the mouse
+            /*
+             */
+            this.cox = mouse.x;
+            this.coy = mouse.y;
+            this.cx = this.mouseX;
+            this.cy = this.mouseY;
+
+            if (mouse.w > 0) {
+              // zoom in
+              this.scale *= 1.1;
+              mouse.w -= 20;
+              if (mouse.w < 0) {
+                mouse.w = 0;
+              }
+            }
+            if (mouse.w < 0) {
+              // zoom out
+              this.scale *= 1 / 1.1;
+              mouse.w += 20;
+              if (mouse.w > 0) {
+                mouse.w = 0;
+              }
+            }
+          }
+          // get the real mouse position
+          var screenX = mouse.x - this.cox;
+          var screenY = mouse.y - this.coy;
+          this.mouseX =
+            this.cx +
+            (screenX * this.invMatrix[0] + screenY * this.invMatrix[2]);
+          this.mouseY =
+            this.cy +
+            (screenX * this.invMatrix[1] + screenY * this.invMatrix[3]);
+          mouse.rx = this.mouseX; // add the coordinates to the mouse. r is for real
+          mouse.ry = this.mouseY;
+          // save old mouse position
+          mouse.oldX = mouse.x;
+          mouse.oldY = mouse.y;
+        }
+      },
+    };
+
+    function update() {
+      // update the transform
+      displayTransform.update();
+      // set home transform to clear the screem
+      displayTransform.setHome();
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      displayTransform.setTransform();
+      ctx.drawImage(img, 0, 0);
+      ctx.fillStyle = "white";
+
+      if (mouse.buttonRaw === 4) {
+        // right click to return to home
+        displayTransform.x = 0;
+        displayTransform.y = 0;
+        displayTransform.scale = 1;
+        displayTransform.rotate = 0;
+        displayTransform.ox = 0;
+        displayTransform.oy = 0;
+      }
+      // reaquest next frame
+      setTimeout(() => requestAnimationFrame(update), 20);
+    }
+    update(); // start it happening
+
     function handleCanvasInteraction(e: MouseEvent) {
-      // console.log(adjArray);
       const x = e.offsetX;
       const y = e.offsetY;
+      const realx = mouse.rx;
+      const realy = mouse.ry;
 
       // Convert coord to cell number
-      const i = Math.round(x / newScale - 0.5);
-      const j = Math.round(y / newScale - 0.5);
+      const i = Math.round(realx / newScale - 0.5);
+      const j = Math.round(realy / newScale - 0.5);
 
       // Pick the two files that cell refers to
       const fileI = files[i];
       const fileJ = files[j];
-      // console.log({i, j, size, linked: linkedQ(fileJ, fileI)});
 
       // If hovering over linked notes, show tooltip, and move it there
       if (adjArray[i][j] === 1) {
+        document.body.style.cursor = "pointer";
         tooltip.addClass("show");
         tooltip.style.transform = `translate(${x + 15}px, ${
           y - canvas.height - 80
         }px)`;
         tooltipText.innerText = `${fileI.basename} → ${fileJ.basename}`;
       } else {
+        document.body.style.cursor = "initial";
         // Hide the tooltip
         tooltip.removeClass("show");
       }
@@ -290,31 +525,13 @@ class MatrixModal extends Modal {
       debounce(handleCanvasInteraction, 20, true)
     );
 
-    canvas.addEventListener("wheel", function (e) {
-      const ctx = canvas.getContext("2d");
-      const alphas = normalise(sumRows(adjArray));
-
-      const x = e.offsetX;
-      const y = e.offsetY;
-
-      // Convert coord to cell number
-      const i = Math.round(x / newScale - 0.5);
-      const j = Math.round(y / newScale - 0.5);
-
-      newScale *= 1 + -e.deltaY / 100 / 2;
-
-      // ctx.translate(e.offsetX, e.offsetY);
-      drawAdj(newScale, alphas, adjArray, canvas, colours);
-      // ctx.translate(-e.offsetX, -e.offsetY);
-    });
-
     async function openClickedCellAsFile(e: MouseEvent) {
-      const x = e.offsetX;
-      const y = e.offsetY;
+      const realx = mouse.rx;
+      const realy = mouse.ry;
 
       // Convert coord to cell number
-      const i = Math.round(x / newScale - 0.5);
-      const j = Math.round(y / newScale - 0.5);
+      const i = Math.round(realx / newScale - 0.5);
+      const j = Math.round(realy / newScale - 0.5);
 
       // Pick the two files that cell refers to
       const fileI = files[i];
@@ -331,15 +548,18 @@ class MatrixModal extends Modal {
     canvas.addEventListener("click", openClickedCellAsFile);
 
     resetScaleButton.addEventListener("click", () => {
-      newScale = scale;
-      const alphas = normalise(sumRows(adjArray));
-      drawAdj(scale, alphas, adjArray, canvas, colours);
+      displayTransform.x = 0;
+      displayTransform.y = 0;
+      displayTransform.scale = 1;
+      displayTransform.rotate = 0;
+      displayTransform.ox = 0;
+      displayTransform.oy = 0;
     });
 
     function saveCanvasAsImage() {
-      let image = new Image();
-      image.src = canvas.toDataURL();
-      const arrBuff = convertDataURIToBinary(image.src);
+      // let image = new Image();
+      // image.src = canvas.toDataURL();
+      const arrBuff = convertDataURIToBinary(img.src);
 
       // Add the current datetime to the image name
       const now = window.moment().format("YYYYMMDDHHmmSS");
