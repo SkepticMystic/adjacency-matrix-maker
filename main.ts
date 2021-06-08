@@ -1,7 +1,9 @@
 import {
   App,
+  ButtonComponent,
   debounce,
   Modal,
+  Notice,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -17,12 +19,12 @@ interface MyPluginSettings {
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-  mainColourHue: 100,
-  mainColourSat: 100,
-  mainColourLight: 50,
-  backgroundColourHue: 30,
-  backgroundColourSat: 20,
-  backgroundColourLight: 50,
+  mainColourHue: 214,
+  mainColourSat: 84,
+  mainColourLight: 57,
+  backgroundColourHue: 20,
+  backgroundColourSat: 17,
+  backgroundColourLight: 3,
 };
 
 // Functions
@@ -65,6 +67,45 @@ function normalise(array: number[]) {
   return array.map((x) => x / max);
 }
 
+function drawAdj(
+  scale: number,
+  alphas: number[],
+  adjArray: number[][],
+  canvas: HTMLCanvasElement,
+  colours: number[]
+) {
+  const ctx = canvas.getContext("2d");
+  const size = alphas.length;
+  canvas.width = size * scale;
+  canvas.height = canvas.height;
+  const [bgH, bgS, bgL, mnH, mnS, mnL] = colours;
+
+  for (let i = 0; i < size; i++) {
+    // Where the alpha of that row is proportional to the number of coloured cells in that row
+    /// Make the more "popular" notes pop
+    const alpha = alphas[i] / 1.5 + 0.33333333;
+
+    for (let j = 0; j < size; j++) {
+      // Position of the top-left corner of the next pixel
+      const x = j * scale;
+      const y = i * scale;
+      let cellColour: string;
+
+      // Change colour if the two notes are linked
+      if (adjArray[i][j] === 0) {
+        cellColour = `hsl(${bgH}, ${bgS}%, ${bgL}%)`;
+      } else {
+        cellColour = `hsla(${mnH}, ${mnS}%, ${mnL}%, ${alpha})`;
+      }
+
+      // Draw the cell
+      ctx.beginPath();
+      ctx.fillStyle = cellColour;
+      ctx.fillRect(x, y, scale, scale);
+    }
+  }
+}
+
 export default class MyPlugin extends Plugin {
   settings: MyPluginSettings;
 
@@ -99,16 +140,16 @@ export default class MyPlugin extends Plugin {
 
   populateAdjacencyMatrixArr(files: TFile[]) {
     const size = files.length;
-    const adj: number[][] = [];
+    const adjArray: number[][] = [];
 
     for (let i = 0; i < size; i++) {
-      adj.push([]);
+      adjArray.push([]);
       for (let j = 0; j < size; j++) {
         // 1 or 0 so that sumRows works (instead of true or false)
-        adj[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
+        adjArray[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
-    return adj;
+    return adjArray;
   }
 
   makeAdjacencyMatrix = async () => {
@@ -118,46 +159,26 @@ export default class MyPlugin extends Plugin {
 
     // Canvas setup
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
     canvas.width = size * scale;
     canvas.height = size * scale;
 
-    const adj = this.populateAdjacencyMatrixArr(files);
-    const normalisedRowSums = normalise(sumRows(adj));
+    const adjArray = this.populateAdjacencyMatrixArr(files);
+    const alphas = normalise(sumRows(adjArray));
 
-    // This for loop colours each cell
-    for (let i = 0; i < size; i++) {
-      // Where the alpha of that row is proportional to the number of coloured cells in that row
-      /// Make the more "popular" notes pop
-      const alpha = normalisedRowSums[i] / 1.5 + 0.33333333;
+    const colours = [
+      this.settings.backgroundColourHue,
+      this.settings.backgroundColourSat,
+      this.settings.backgroundColourLight,
+      this.settings.mainColourHue,
+      this.settings.mainColourSat,
+      this.settings.mainColourLight,
+    ];
 
-      for (let j = 0; j < size; j++) {
-        // Position of the top-left corner of the next pixel
-        const x = j * scale;
-        const y = i * scale;
-        let cellColour: string;
+    console.log(this.settings);
 
-        // Change colour if the two notes are linked
-        if (adj[i][j] === 0) {
-          const bgH = this.settings.backgroundColourHue;
-          const bgS = this.settings.backgroundColourSat;
-          const bgL = this.settings.backgroundColourLight;
-          cellColour = `hsl(${bgH}, ${bgS}%, ${bgL}%)`;
-        } else {
-          const mnH = this.settings.mainColourHue;
-          const mnS = this.settings.mainColourSat;
-          const mnL = this.settings.mainColourLight;
-          cellColour = `hsla(${mnH}, ${mnS}%, ${mnL}%, ${alpha})`;
-        }
+    drawAdj(scale, alphas, adjArray, canvas, colours);
 
-        // Draw the cell
-        ctx.beginPath();
-        ctx.fillStyle = cellColour;
-        ctx.fillRect(x, y, scale, scale);
-      }
-    }
-
-    new MatrixModal(this.app, canvas, files, scale).open();
+    new MatrixModal(this.app, canvas, files, scale, adjArray, colours).open();
   };
 
   onunload() {
@@ -177,28 +198,37 @@ class MatrixModal extends Modal {
   private canvas: HTMLCanvasElement;
   private files: TFile[];
   private scale: number;
+  private adjArray: number[][];
+  private colours: number[];
 
   constructor(
     app: App,
     canvas: HTMLCanvasElement,
     files: TFile[],
-    scale: number
+    scale: number,
+    adjArray: number[][],
+    colours: number[]
   ) {
     super(app);
     this.canvas = canvas;
     this.files = files;
     this.scale = scale;
+    this.adjArray = adjArray;
+    this.colours = colours;
   }
 
   onOpen() {
     const app = this.app;
     const scale = this.scale;
     const files = this.files;
+    const adjArray = this.adjArray;
+    const colours = this.colours;
 
     // Add the canvas to the modal
     let { contentEl } = this;
     contentEl.addClass("contentEl");
     const canvas = this.canvas;
+    const ctx = canvas.getContext("2d");
     contentEl.appendChild(canvas);
 
     // Save image button
@@ -206,10 +236,11 @@ class MatrixModal extends Modal {
     const saveImageButton = buttonRow.createEl("button", {
       text: "Save Image",
     });
+    const resetScaleButton = buttonRow.createEl("button", {
+      text: "Reset Scale",
+    });
 
     // Tooltip
-    /// TODO: The tooltip starts at the bottom left
-    /// I can't get the tooltip to show if I append it to the canvas itself, but I seem to have found a workaround
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
@@ -222,19 +253,24 @@ class MatrixModal extends Modal {
       return fromLinks.includes(to.basename);
     }
 
+    let newScale = scale;
+
     function handleCanvasInteraction(e: MouseEvent) {
-      let x = e.offsetX;
-      let y = e.offsetY;
+      // console.log(adjArray);
+      const x = e.offsetX;
+      const y = e.offsetY;
 
       // Convert coord to cell number
-      const i = Math.round(x / scale - 0.5);
-      const j = Math.round(y / scale - 0.5);
+      const i = Math.round(x / newScale - 0.5);
+      const j = Math.round(y / newScale - 0.5);
+
       // Pick the two files that cell refers to
       const fileI = files[i];
       const fileJ = files[j];
+      // console.log({i, j, size, linked: linkedQ(fileJ, fileI)});
 
       // If hovering over linked notes, show tooltip, and move it there
-      if (linkedQ(fileJ, fileI)) {
+      if (adjArray[j][i] === 1) {
         tooltip.addClass("show");
         tooltip.style.transform = `translate(${x + 15}px, ${
           y - canvas.height - 80
@@ -251,6 +287,18 @@ class MatrixModal extends Modal {
       debounce(handleCanvasInteraction, 20, true)
     );
 
+    canvas.addEventListener("wheel", function (event) {
+      newScale *= 1 + -event.deltaY / 100 / 2;
+      const alphas = normalise(sumRows(adjArray));
+      drawAdj(newScale, alphas, adjArray, canvas, colours);
+    });
+
+    resetScaleButton.addEventListener("click", () => {
+      newScale = scale;
+      const alphas = normalise(sumRows(adjArray));
+      drawAdj(scale, alphas, adjArray, canvas, colours);
+    });
+
     function saveCanvasAsImage() {
       let image = new Image();
       image.src = canvas.toDataURL();
@@ -260,6 +308,7 @@ class MatrixModal extends Modal {
       const now = window.moment().format("YYYYMMDDHHmmSS");
       // Save image to root. This could be improved to let the user choose the path
       app.vault.createBinary(`/adj ${now}.png`, arrBuff);
+      new Notice("Image saved");
     }
 
     saveImageButton.addEventListener("click", saveCanvasAsImage);
