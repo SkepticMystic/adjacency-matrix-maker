@@ -69,14 +69,12 @@ function normalise(array: number[]) {
   return array.map((x) => x / max);
 }
 
-function drawAdjAsImage(
+async function drawAdjAsImage(
   scale: number,
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
   colours: number[],
-  offsetX: number = 0,
-  offsetY: number = 0
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
@@ -84,12 +82,12 @@ function drawAdjAsImage(
   canvas.height = canvas.height;
   const [bgH, bgS, bgL, mnH, mnS, mnL] = colours;
 
-  for (let i = offsetX; i < size; i++) {
+  for (let i = 0; i < size; i++) {
     // Where the alpha of that row is proportional to the number of coloured cells in that row
     /// Make the more "popular" notes pop
     const alpha = alphas[i] / 1.5 + 0.33333333;
 
-    for (let j = offsetY; j < size; j++) {
+    for (let j = 0; j < size; j++) {
       // Position of the top-left corner of the next pixel
       const x = i * scale;
       const y = j * scale;
@@ -181,9 +179,9 @@ export default class MyPlugin extends Plugin {
       this.settings.mainColourLight,
     ];
 
-    const img = drawAdjAsImage(scale, alphas, adjArray, canvas, colours);
-
-    new MatrixModal(this.app, img, files, scale, adjArray, colours).open();
+    const img = await drawAdjAsImage(scale, alphas, adjArray, canvas, colours);
+    // console.log('Opening modal...');
+    new MatrixModal(this.app, img, files, scale, adjArray).open();
   };
 
   onunload() {
@@ -201,47 +199,41 @@ export default class MyPlugin extends Plugin {
 
 class MatrixModal extends Modal {
   private img: HTMLImageElement;
-  // private canvas: HTMLCanvasElement;
   private files: TFile[];
   private scale: number;
   private adjArray: number[][];
-  private colours: number[];
 
   constructor(
     app: App,
     img: HTMLImageElement,
     files: TFile[],
     scale: number,
-    adjArray: number[][],
-    colours: number[]
+    adjArray: number[][]
   ) {
     super(app);
     this.img = img;
     this.files = files;
     this.scale = scale;
     this.adjArray = adjArray;
-    this.colours = colours;
   }
 
   interval: NodeJS.Timeout;
 
-  async onOpen() {
+  onOpen() {
     const modal = this;
     const app = this.app;
     const img = this.img;
     const scale = this.scale;
     const files = this.files;
     const adjArray = this.adjArray;
-    // const colours = this.colours;
 
     // Add the canvas to the modal
     let { contentEl } = this;
     contentEl.addClass("contentEl");
     const canvas = contentEl.createEl("canvas");
     canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.height = canvas.width;
     const ctx = canvas.getContext("2d");
-    await ctx.drawImage(img, 0, 0);
 
     // Save image button
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
@@ -256,9 +248,8 @@ class MatrixModal extends Modal {
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
-    let newScale = scale;
 
-    ////// Test code /////////
+    ////// Zoom & Pan code /////////
     const mouse = {
       x: 0,
       y: 0,
@@ -271,8 +262,6 @@ class MatrixModal extends Modal {
       over: false,
       buttons: [1, 2, 4, 6, 5, 3], // masks for setting and clearing button raw bits;
     };
-
-    
 
     function mouseMove(event: MouseEvent | WheelEvent) {
       mouse.x = event.offsetX;
@@ -294,10 +283,6 @@ class MatrixModal extends Modal {
         event.preventDefault();
         mouse.w = -event.deltaY;
       }
-      // else if (event.type === "DOMMouseScroll") {
-      //   // FF you pedantic doffus
-      //   mouse.w = -event.detail;
-      // }
     }
 
     function setupMouse(e: HTMLElement) {
@@ -307,8 +292,6 @@ class MatrixModal extends Modal {
       e.addEventListener("mouseout", mouseMove);
       e.addEventListener("mouseover", mouseMove);
       e.addEventListener("mousewheel", mouseMove);
-      // e.addEventListener("DOMMouseScroll", mouseMove); // fire fox
-
       e.addEventListener(
         "contextmenu",
         function (e) {
@@ -355,7 +338,7 @@ class MatrixModal extends Modal {
       setHome: function () {
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       },
-      update: function () {
+      updateValues: function () {
         // smooth all movement out. drag and accel control how this moves
         // acceleration
         this.dx += (this.x - this.cx) * this.accel;
@@ -382,9 +365,9 @@ class MatrixModal extends Modal {
         // this.crotate += this.drotate;
 
         // create the display matrix
-        this.matrix[0] = Math.cos(this.crotate) * this.cscale;
-        this.matrix[1] = Math.sin(this.crotate) * this.cscale;
-        this.matrix[2] = -this.matrix[1];
+        this.matrix[0] = this.cscale;
+        // this.matrix[1] = Math.sin(this.crotate) * this.cscale;
+        // this.matrix[2] = -this.matrix[1];
         this.matrix[3] = this.matrix[0];
 
         // set the coords relative to the origin
@@ -395,10 +378,10 @@ class MatrixModal extends Modal {
 
         // create invers matrix
         let det =
-          this.matrix[0] * this.matrix[3] - this.matrix[1] * this.matrix[2];
+          this.matrix[0] * this.matrix[3];
         this.invMatrix[0] = this.matrix[3] / det;
-        this.invMatrix[1] = -this.matrix[1] / det;
-        this.invMatrix[2] = -this.matrix[2] / det;
+        // this.invMatrix[1] = -this.matrix[1] / det;
+        // this.invMatrix[2] = -this.matrix[2] / det;
         this.invMatrix[3] = this.matrix[0] / det;
 
         // check for mouse. Do controls and get real position of mouse.
@@ -409,8 +392,8 @@ class MatrixModal extends Modal {
             var mdx = mouse.x - mouse.oldX; // get the mouse movement
             var mdy = mouse.y - mouse.oldY;
             // get the movement in real space
-            var mrx = mdx * this.invMatrix[0] + mdy * this.invMatrix[2];
-            var mry = mdx * this.invMatrix[1] + mdy * this.invMatrix[3];
+            var mrx = mdx * this.invMatrix[0]; // + mdy * this.invMatrix[2];
+            var mry = mdy * this.invMatrix[3]; // + mdx * this.invMatrix[1]
             this.x -= mrx;
             this.y -= mry;
           }
@@ -425,15 +408,15 @@ class MatrixModal extends Modal {
             // and the zoom does not feel right (lagging and not
             // zooming around the mouse
             /*
-             */
             this.cox = mouse.x;
             this.coy = mouse.y;
             this.cx = this.mouseX;
             this.cy = this.mouseY;
+            */
 
             if (mouse.w > 0) {
               // zoom in
-              this.scale *= 1.1;
+              this.scale *= 1.15;
               mouse.w -= 20;
               if (mouse.w < 0) {
                 mouse.w = 0;
@@ -441,7 +424,7 @@ class MatrixModal extends Modal {
             }
             if (mouse.w < 0) {
               // zoom out
-              this.scale *= 1 / 1.1;
+              this.scale *= 1 / 1.15;
               mouse.w += 20;
               if (mouse.w > 0) {
                 mouse.w = 0;
@@ -453,10 +436,10 @@ class MatrixModal extends Modal {
           var screenY = mouse.y - this.coy;
           this.mouseX =
             this.cx +
-            (screenX * this.invMatrix[0] + screenY * this.invMatrix[2]);
+            (screenX * this.invMatrix[0]); // + screenY * this.invMatrix[2]
           this.mouseY =
             this.cy +
-            (screenX * this.invMatrix[1] + screenY * this.invMatrix[3]);
+            (screenY * this.invMatrix[3]); //screenX * this.invMatrix[1] + 
           mouse.rx = this.mouseX; // add the coordinates to the mouse. r is for real
           mouse.ry = this.mouseY;
           // save old mouse position
@@ -467,16 +450,15 @@ class MatrixModal extends Modal {
     };
 
     function update() {
-      console.count("updating");
+      // console.count("updating");
       // update the transform
-      displayTransform.update();
+      displayTransform.updateValues();
       // set home transform to clear the screem
       displayTransform.setHome();
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       displayTransform.setTransform();
       ctx.drawImage(img, 0, 0);
-      // ctx.fillStyle = "white";
 
       if (mouse.buttonRaw === 4) {
         // right click to return to home
@@ -488,18 +470,19 @@ class MatrixModal extends Modal {
         displayTransform.oy = 0;
       }
     }
-    update();
-    this.interval = setInterval(update, 30);
+    
+    // update();
+    this.interval = setInterval(update, 25);
 
-    function handleCanvasInteraction(e: MouseEvent) {
+    function handleTooltip(e: MouseEvent) {
       const x = e.offsetX;
       const y = e.offsetY;
       const realx = mouse.rx;
       const realy = mouse.ry;
 
       // Convert coord to cell number
-      const i = Math.round(realx / newScale - 0.5);
-      const j = Math.round(realy / newScale - 0.5);
+      const i = Math.round(realx / scale - 0.5);
+      const j = Math.round(realy / scale - 0.5);
 
       // Pick the two files that cell refers to
       const fileI = files[i];
@@ -522,25 +505,23 @@ class MatrixModal extends Modal {
 
     canvas.addEventListener(
       "mousemove",
-      debounce(handleCanvasInteraction, 30, true)
+      debounce(handleTooltip, 25, true)
     );
 
-    async function openClickedCellAsFile(e: MouseEvent) {
+    async function openClickedCellAsFile() {
       const realx = mouse.rx;
       const realy = mouse.ry;
 
       // Convert coord to cell number
-      const i = Math.round(realx / newScale - 0.5);
-      const j = Math.round(realy / newScale - 0.5);
+      const i = Math.round(realx / scale - 0.5);
+      const j = Math.round(realy / scale - 0.5);
 
-      // Pick the two files that cell refers to
+      // Pick the file that cell refers to (the `from` value)
       const fileI = files[i];
-      // const fileJ = files[j];
 
       if (adjArray[i][j] === 1) {
         // Open the clicked cell (from, not to) in the active leaf
         await app.workspace.activeLeaf.openFile(fileI);
-
         modal.close();
       }
     }
@@ -561,7 +542,8 @@ class MatrixModal extends Modal {
 
       // Add the current datetime to the image name
       const now = window.moment().format("YYYYMMDDHHmmSS");
-      // Save image to root. This could be improved to let the user choose the path
+      // Save image to root
+      /// This could be improved to let the user choose the path
       app.vault.createBinary(`/adj ${now}.png`, arrBuff);
       new Notice("Image saved");
     }
