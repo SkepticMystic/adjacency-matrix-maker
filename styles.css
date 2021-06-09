@@ -19,6 +19,6 @@ div.adj-tooltip.show {
   
 } */
 
-/* div.matrixModalButtons {
-
-} */
+div.matrixModalButtons {
+  padding-bottom: 5px;
+}

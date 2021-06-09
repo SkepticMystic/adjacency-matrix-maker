@@ -119,6 +119,7 @@ export default class MyPlugin extends Plugin {
 
     await this.loadSettings();
 
+
     this.addRibbonIcon("dice", "Adjacency Matrix", this.makeAdjacencyMatrix);
 
     this.addCommand({
@@ -229,14 +230,21 @@ class MatrixModal extends Modal {
 
     // Add the canvas to the modal
     let { contentEl } = this;
+
+    contentEl.style.height = `${Math.round(screen.height / 1.2)}px`;
+    // contentEl.style.width = `${screen.width / 2}px`;
     contentEl.addClass("contentEl");
+    const vaultName: string = app.vault.adapter.basePath.match(/\\([^\\]+$)/g);
+    contentEl.createEl('h2', { text: `Adjacency matrix of: ${vaultName}`});
+
+    const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
+
     const canvas = contentEl.createEl("canvas");
     canvas.width = img.width;
     canvas.height = canvas.width;
     const ctx = canvas.getContext("2d");
 
     // Save image button
-    const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
     const saveImageButton = buttonRow.createEl("button", {
       text: "Save Image",
     });
