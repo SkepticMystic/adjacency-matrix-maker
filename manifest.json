@@ -1,7 +1,7 @@
 {
 	"id": "adjacency-matrix-maker",
 	"name": "Adjacency Matrix Maker",
-	"version": "0.4.0",
+	"version": "0.4.1",
 	"minAppVersion": "0.12.4",
 	"description": "Create an interactive image of an adjacency matrix of your vault",
 	"author": "SkepticMystic",
