@@ -1,6 +1,6 @@
 import {
+  addIcon,
   App,
-  ButtonComponent,
   debounce,
   Modal,
   Notice,
@@ -11,7 +11,7 @@ import {
   Workspace,
   WorkspaceLeaf,
 } from "obsidian";
-interface MyPluginSettings {
+interface AdjacencyMatrixMakerPluginSettings {
   mainColourHue: number;
   mainColourSat: number;
   mainColourLight: number;
@@ -20,7 +20,7 @@ interface MyPluginSettings {
   backgroundColourLight: number;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   mainColourHue: 214,
   mainColourSat: 84,
   mainColourLight: 57,
@@ -74,7 +74,7 @@ async function drawAdjAsImage(
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
-  colours: number[],
+  colours: number[]
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
@@ -111,37 +111,42 @@ async function drawAdjAsImage(
   return img;
 }
 
-export default class MyPlugin extends Plugin {
-  settings: MyPluginSettings;
+export default class AdjacencyMatrixMakerPlugin extends Plugin {
+  settings: AdjacencyMatrixMakerPluginSettings;
 
   async onload() {
     console.log("Loading Adjacency Matrix Maker plugin");
 
     await this.loadSettings();
 
-
-    this.addRibbonIcon("dice", "Adjacency Matrix", this.makeAdjacencyMatrix);
+    addIcon(
+      "matrix",
+      `<path fill="currentColor" stroke="currentColor" d="M8,8v84h84v-6H80V74h-6V62h6v-6H68V44H38V32h6v-6h12v6h-6v6h12v-6h18V20h12v-6h-6V8h-6v6h-6V8h-6v6h-6V8h-6v12h-6V8h-6v12 h-6v6h-6v12H20v6h12v6h-6v6h12v-6h24v24h6v6h6v6H62V74h-6v6H44v6h-6v-6H26v6H14V38h6V20h-6V8L8,8z M20,20h6V8h-6V20z M56,74v-6h-6 v6H56z M26,56h-6v6h6V56z M68,44h6v6h6v6h12v-6h-6v-6h6v-6H68L68,44z M80,62v12h6v-6h6v-6H80z M86,74v6h6v-6H86z M32,8v6h6V8L32,8 z M62,20h6v6h-6V20z M86,26v6h6v-6H86z M50,56v6h6v-6H50z M38,62v6h-6v6h12V62H38z M20,68v6h6v-6H20z"/>`
+    );
+    this.addRibbonIcon("matrix", "Adjacency Matrix", () =>
+      this.makeAdjacencyMatrix(this.settings)
+    );
 
     this.addCommand({
       id: "adjacency-matrix",
       name: "Open Adjacency Matrix",
-      callback: this.makeAdjacencyMatrix,
+      callback: () => this.makeAdjacencyMatrix(this.settings),
     });
 
     this.addSettingTab(new AdjacencyMatrixMakerSettingTab(this.app, this));
-
-    this.registerCodeMirror((cm: CodeMirror.Editor) => {
-      // console.log("codemirror", cm);
-    });
   }
 
   // Does `from` have a link going to `to`?
   linkedQ(from: TFile, to: TFile) {
-    const fromLinkObjs = this.app.metadataCache.getFileCache(from).links || [];
-    const fromLinks = fromLinkObjs.map(
-      (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
+    // const fromLinkObjs = this.app.metadataCache.getFileCache(from).links || [];
+    // const fromLinks = fromLinkObjs.map(
+    //   (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
+    // );
+    // return fromLinks.includes(to.basename);
+
+    return this.app.metadataCache.resolvedLinks[from.path]?.hasOwnProperty(
+      to.path
     );
-    return fromLinks.includes(to.basename);
   }
 
   populateAdjacencyMatrixArr(files: TFile[]) {
@@ -158,7 +163,9 @@ export default class MyPlugin extends Plugin {
     return adjArray;
   }
 
-  makeAdjacencyMatrix = async () => {
+  makeAdjacencyMatrix = async (
+    settings: AdjacencyMatrixMakerPluginSettings
+  ) => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
     const size = files.length;
     const scale = size < 50 ? 16 : size < 100 ? 8 : size < 200 ? 4 : 2;
@@ -172,21 +179,21 @@ export default class MyPlugin extends Plugin {
     const alphas = normalise(sumRows(adjArray));
 
     const colours = [
-      this.settings.backgroundColourHue,
-      this.settings.backgroundColourSat,
-      this.settings.backgroundColourLight,
-      this.settings.mainColourHue,
-      this.settings.mainColourSat,
-      this.settings.mainColourLight,
+      settings.backgroundColourHue,
+      settings.backgroundColourSat,
+      settings.backgroundColourLight,
+      settings.mainColourHue,
+      settings.mainColourSat,
+      settings.mainColourLight,
     ];
 
     const img = await drawAdjAsImage(scale, alphas, adjArray, canvas, colours);
-    // console.log('Opening modal...');
+
     new MatrixModal(this.app, img, files, scale, adjArray).open();
   };
 
   onunload() {
-    console.log("unloading plugin");
+    console.log("unloading adjacency matrix maker plugin");
   }
 
   async loadSettings() {
@@ -231,11 +238,11 @@ class MatrixModal extends Modal {
     // Add the canvas to the modal
     let { contentEl } = this;
 
-    contentEl.style.height = `${Math.round(screen.height / 1.2)}px`;
-    // contentEl.style.width = `${screen.width / 2}px`;
-    contentEl.addClass("contentEl");
-    const vaultName: string = app.vault.adapter.basePath.match(/\\([^\\]+$)/g);
-    contentEl.createEl('h2', { text: `Adjacency matrix of: ${vaultName}`});
+    contentEl.style.height = `${Math.round(screen.height / 1.5)}px`;
+
+    // contentEl.addClass("contentEl");
+    // const vaultName: string = app.vault.adapter.basePath.match(/\\([^\\]+$)/g);
+    // contentEl.createEl("h2", { text: "Adjacency matrix" });
 
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
 
@@ -256,7 +263,6 @@ class MatrixModal extends Modal {
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
-
     ////// Zoom & Pan code /////////
     const mouse = {
       x: 0,
@@ -269,6 +275,10 @@ class MatrixModal extends Modal {
       buttonRaw: 0,
       over: false,
       buttons: [1, 2, 4, 6, 5, 3], // masks for setting and clearing button raw bits;
+      rx: 0,
+      ry: 0,
+      oldX: 0,
+      oldY: 0,
     };
 
     function mouseMove(event: MouseEvent | WheelEvent) {
@@ -310,6 +320,10 @@ class MatrixModal extends Modal {
     }
     setupMouse(canvas);
 
+    const initialScale = Math.min(
+      1 / (img.width / contentEl.clientWidth),
+      1 / (img.height / contentEl.clientHeight)
+    );
     // Real space, real, r (prefix) refers to the transformed canvas space.
     // c (prefix), chase is the value that chases a requiered value
     var displayTransform = {
@@ -317,7 +331,7 @@ class MatrixModal extends Modal {
       y: 0,
       ox: 0,
       oy: 0,
-      scale: 1,
+      scale: initialScale,
       rotate: 0,
       cx: 0, // chase values Hold the actual display
       cy: 0,
@@ -385,8 +399,7 @@ class MatrixModal extends Modal {
           -(this.cx * this.matrix[1] + this.cy * this.matrix[3]) + this.coy;
 
         // create invers matrix
-        let det =
-          this.matrix[0] * this.matrix[3];
+        let det = this.matrix[0] * this.matrix[3];
         this.invMatrix[0] = this.matrix[3] / det;
         // this.invMatrix[1] = -this.matrix[1] / det;
         // this.invMatrix[2] = -this.matrix[2] / det;
@@ -442,12 +455,8 @@ class MatrixModal extends Modal {
           // get the real mouse position
           var screenX = mouse.x - this.cox;
           var screenY = mouse.y - this.coy;
-          this.mouseX =
-            this.cx +
-            (screenX * this.invMatrix[0]); // + screenY * this.invMatrix[2]
-          this.mouseY =
-            this.cy +
-            (screenY * this.invMatrix[3]); //screenX * this.invMatrix[1] + 
+          this.mouseX = this.cx + screenX * this.invMatrix[0]; // + screenY * this.invMatrix[2]
+          this.mouseY = this.cy + screenY * this.invMatrix[3]; //screenX * this.invMatrix[1] +
           mouse.rx = this.mouseX; // add the coordinates to the mouse. r is for real
           mouse.ry = this.mouseY;
           // save old mouse position
@@ -470,15 +479,16 @@ class MatrixModal extends Modal {
 
       if (mouse.buttonRaw === 4) {
         // right click to return to home
-        displayTransform.x = 0;
-        displayTransform.y = 0;
-        displayTransform.scale = 1;
-        displayTransform.rotate = 0;
-        displayTransform.ox = 0;
-        displayTransform.oy = 0;
+        // displayTransform.x = 0;
+        // displayTransform.y = 0;
+        // displayTransform.scale = 1;
+        // displayTransform.rotate = 0;
+        // displayTransform.ox = 0;
+        // displayTransform.oy = 0;
+        displayTransform.scale = initialScale;
       }
     }
-    
+
     // update();
     this.interval = setInterval(update, 25);
 
@@ -511,10 +521,7 @@ class MatrixModal extends Modal {
       }
     }
 
-    canvas.addEventListener(
-      "mousemove",
-      debounce(handleTooltip, 25, true)
-    );
+    canvas.addEventListener("mousemove", debounce(handleTooltip, 25, true));
 
     async function openClickedCellAsFile() {
       const realx = mouse.rx;
@@ -537,12 +544,14 @@ class MatrixModal extends Modal {
     canvas.addEventListener("click", openClickedCellAsFile);
 
     resetScaleButton.addEventListener("click", () => {
-      displayTransform.x = 0;
-      displayTransform.y = 0;
-      displayTransform.scale = 1;
-      displayTransform.rotate = 0;
-      displayTransform.ox = 0;
-      displayTransform.oy = 0;
+      // displayTransform.x = 0;
+      // displayTransform.y = 0;
+      // displayTransform.scale = 1;
+      // displayTransform.rotate = 0;
+      // displayTransform.ox = 0;
+      // displayTransform.oy = 0;
+
+      displayTransform.scale = initialScale;
     });
 
     function saveCanvasAsImage() {
@@ -567,9 +576,9 @@ class MatrixModal extends Modal {
 }
 
 class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
-  plugin: MyPlugin;
+  plugin: AdjacencyMatrixMakerPlugin;
 
-  constructor(app: App, plugin: MyPlugin) {
+  constructor(app: App, plugin: AdjacencyMatrixMakerPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
