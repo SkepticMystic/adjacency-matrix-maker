@@ -107,7 +107,7 @@ async function drawAdjAsImage(
     }
   }
   const img = new Image();
-  img.src = canvas.toDataURL();
+  img.src = canvas.toDataURL('image/svg');
   return img;
 }
 
@@ -138,12 +138,6 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
 
   // Does `from` have a link going to `to`?
   linkedQ(from: TFile, to: TFile) {
-    // const fromLinkObjs = this.app.metadataCache.getFileCache(from).links || [];
-    // const fromLinks = fromLinkObjs.map(
-    //   (linkObj) => linkObj.link.replace(/#.+/g, "") || ""
-    // );
-    // return fromLinks.includes(to.basename);
-
     return this.app.metadataCache.resolvedLinks[from.path]?.hasOwnProperty(
       to.path
     );
@@ -157,6 +151,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       adjArray.push([]);
       for (let j = 0; j < size; j++) {
         // 1 or 0 so that sumRows works (instead of true or false)
+        /// I think I can just use the link count here, nothing else to do
         adjArray[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
@@ -240,7 +235,6 @@ class MatrixModal extends Modal {
 
     contentEl.style.height = `${Math.round(screen.height / 1.5)}px`;
 
-    // contentEl.addClass("contentEl");
     // const vaultName: string = app.vault.adapter.basePath.match(/\\([^\\]+$)/g);
     // contentEl.createEl("h2", { text: "Adjacency matrix" });
 
@@ -248,7 +242,7 @@ class MatrixModal extends Modal {
 
     const canvas = contentEl.createEl("canvas");
     canvas.width = img.width;
-    canvas.height = canvas.width;
+    canvas.height = img.height;
     const ctx = canvas.getContext("2d");
 
     // Save image button
