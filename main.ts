@@ -12,6 +12,7 @@ import {
   TAbstractFile,
   Workspace,
   WorkspaceLeaf,
+  parseFrontMatterEntry,
 } from "obsidian";
 import {
   normalise,
@@ -25,6 +26,8 @@ interface AdjacencyMatrixMakerPluginSettings {
   backgroundColour: string;
   imgName: string;
   folderPath: string;
+  showFolders: boolean;
+  folderSquaresColour: string;
 }
 
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
@@ -32,10 +35,12 @@ const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   backgroundColour: "#141414",
   imgName: "adj",
   folderPath: "/",
+  showFolders: true,
+  folderSquaresColour: "#ffffff",
 };
 
 function validFolderPathQ(path: string) {
-  const file: TAbstractFile = this.app.vault.getAbstractFileByPath(path);
+  const file: TAbstractFile = app.vault.getAbstractFileByPath(path);
   return file && file instanceof TFolder;
 }
 
@@ -44,7 +49,8 @@ async function drawAdjAsImage(
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
-  settings: AdjacencyMatrixMakerPluginSettings
+  settings: AdjacencyMatrixMakerPluginSettings,
+  folderChangeIndices: number[]
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
@@ -78,9 +84,48 @@ async function drawAdjAsImage(
       ctx.fillRect(x, y, scale, scale);
     }
   }
+
+  // Add the folder squares if enabled
+  if (settings.showFolders) {
+    folderChangeIndices.forEach((change, i) => {
+      ctx.strokeStyle = settings.folderSquaresColour;
+      const start = change * scale;
+      const sideLength = (folderChangeIndices[i + 1] - change) * scale;
+      ctx.strokeRect(start, start, sideLength, sideLength);
+    });
+
+    // For the last square
+    const lastStart = folderChangeIndices.last() * scale;
+    const lastSideLength = canvas.width - lastStart;
+    ctx.strokeRect(lastStart, lastStart, lastSideLength, lastSideLength);
+  }
+
   const img = new Image();
   img.src = canvas.toDataURL("image/svg");
   return img;
+}
+
+function indexOfFolderChanges(files: TFile[]) {
+  // Get the first-level folder of all files
+  const firstFolders = files
+    .map((file) => file.path.match(/[^\/]+/)[0])
+    .map((firstFolder) => {
+      // Returning '/' if that file is in the root folder
+      if (firstFolder.includes(".md")) {
+        return "/";
+      } else {
+        return firstFolder;
+      }
+    });
+
+  // Mark the index at which a new run/streak starts
+  const newValueAt = [0];
+  for (let i = 1; i < files.length; i++) {
+    if (firstFolders[i] !== firstFolders[i - 1]) {
+      newValueAt.push(i);
+    }
+  }
+  return newValueAt;
 }
 
 export default class AdjacencyMatrixMakerPlugin extends Plugin {
@@ -95,21 +140,19 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       "matrix",
       `<path fill="currentColor" stroke="currentColor" d="M8,8v84h84v-6H80V74h-6V62h6v-6H68V44H38V32h6v-6h12v6h-6v6h12v-6h18V20h12v-6h-6V8h-6v6h-6V8h-6v6h-6V8h-6v12h-6V8h-6v12 h-6v6h-6v12H20v6h12v6h-6v6h12v-6h24v24h6v6h6v6H62V74h-6v6H44v6h-6v-6H26v6H14V38h6V20h-6V8L8,8z M20,20h6V8h-6V20z M56,74v-6h-6 v6H56z M26,56h-6v6h6V56z M68,44h6v6h6v6h12v-6h-6v-6h6v-6H68L68,44z M80,62v12h6v-6h6v-6H80z M86,74v6h6v-6H86z M32,8v6h6V8L32,8 z M62,20h6v6h-6V20z M86,26v6h6v-6H86z M50,56v6h6v-6H50z M38,62v6h-6v6h12V62H38z M20,68v6h6v-6H20z"/>`
     );
-    this.addRibbonIcon("matrix", "Adjacency Matrix", () =>
-      this.makeAdjacencyMatrix()
-    );
+    this.addRibbonIcon("matrix", "Adjacency Matrix", this.makeAdjacencyMatrix);
 
     this.addCommand({
       id: "adjacency-matrix",
       name: "Open Adjacency Matrix",
-      callback: () => this.makeAdjacencyMatrix(),
+      callback: this.makeAdjacencyMatrix,
     });
 
     this.addSettingTab(new AdjacencyMatrixMakerSettingTab(this.app, this));
 
     // Hacky method to fixing the backgroundColourPicker problem
     /// It wouldn't show the default colour as it's value onLoad, but this makes it
-    this.settings.backgroundColour = "#201e1e";
+    // this.settings.backgroundColour = "#201e1e";
   }
 
   // Does `from` have a link going to `to`?
@@ -127,7 +170,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       adjArray.push([]);
       for (let j = 0; j < size; j++) {
         // 1 or 0 so that sumRows works (instead of true or false)
-        /// I think I can just use the link count here, nothing else to do
+        /// Todo: I think I can just use the link count here, nothing else to do
         adjArray[i][j] = this.linkedQ(files[i], files[j]) ? 1 : 0;
       }
     }
@@ -149,12 +192,17 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const adjArray = this.populateAdjacencyMatrixArr(files);
     const alphas = normalise(sumRows(adjArray));
 
+    // Determine where folder changes
+    const folderChangeIndices = this.settings.showFolders ? indexOfFolderChanges(files) : [];
+    
+
     const img = await drawAdjAsImage(
       scale,
       alphas,
       adjArray,
       canvas,
-      this.settings
+      this.settings,
+      folderChangeIndices
     );
 
     new MatrixModal(
@@ -562,7 +610,7 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
 
   constructor(app: App, plugin: AdjacencyMatrixMakerPlugin) {
     super(app, plugin);
-    this.plugin = plugin;
+    // this.plugin = plugin;
   }
 
   display(): void {
@@ -584,13 +632,12 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
     mainColourPicker.value = hslToHex(
       ...this.plugin.settings.mainColourComponents
     );
-    mainColourPicker.addEventListener(
-      "change",
-      () =>
-        (this.plugin.settings.mainColourComponents = hexToHSL(
-          mainColourPicker.value
-        ))
-    );
+    mainColourPicker.addEventListener("change", async () => {
+      this.plugin.settings.mainColourComponents = hexToHSL(
+        mainColourPicker.value
+      );
+      await this.plugin.saveSettings();
+    });
 
     // Background colour picker
     const backgroundColourDiv = coloursDiv.createDiv();
@@ -602,11 +649,38 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
     });
 
     backgroundColourPicker.value = this.plugin.settings.backgroundColour;
-    backgroundColourPicker.addEventListener(
-      "change",
-      () =>
-        (this.plugin.settings.backgroundColour = backgroundColourPicker.value)
-    );
+    backgroundColourPicker.addEventListener("change", async () => {
+      this.plugin.settings.backgroundColour = backgroundColourPicker.value;
+      await this.plugin.saveSettings();
+    });
+
+    // Folder squares colour picker
+    const folderSquaresColourDiv = coloursDiv.createDiv();
+    folderSquaresColourDiv.createEl("h4", {
+      text: "Folder squares colour",
+    });
+    const folderSquaresColourPicker = folderSquaresColourDiv.createEl("input", {
+      type: "color",
+    });
+
+    folderSquaresColourPicker.value = this.plugin.settings.folderSquaresColour;
+    folderSquaresColourPicker.addEventListener("change", async () => {
+      this.plugin.settings.folderSquaresColour =
+        folderSquaresColourPicker.value;
+      await this.plugin.saveSettings();
+    });
+
+    new Setting(containerEl)
+      .setName("Show folders")
+      .setDesc("Add squares to the image showing which folder a note is in")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.showFolders)
+          .onChange(async (value) => {
+            this.plugin.settings.showFolders = value;
+            await this.plugin.saveSettings();
+          })
+      );
 
     new Setting(containerEl)
       .setName("Image name")
