@@ -34,6 +34,11 @@ const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   folderPath: "/",
 };
 
+function validFolderPathQ(path: string) {
+  const file: TAbstractFile = this.app.vault.getAbstractFileByPath(path);
+  return file && file instanceof TFolder;
+}
+
 async function drawAdjAsImage(
   scale: number,
   alphas: number[],
@@ -532,14 +537,13 @@ class MatrixModal extends Modal {
       const imgName = settings.imgName;
 
       // Folder path to save img
-      const folderPath = settings.folderPath === '' ? '/' : settings.folderPath;
-      const abstractFile = app.vault.getAbstractFileByPath(folderPath);
+      const folderPath = settings.folderPath === "" ? "/" : settings.folderPath;
 
-      if (abstractFile && abstractFile instanceof TFolder) {
+      if (validFolderPathQ(folderPath)) {
         app.vault.createBinary(`${folderPath}/${imgName} ${now}.png`, arrBuff);
         new Notice("Image saved");
       } else {
-        new Notice('Chosen folder path does not exist in your vault')
+        new Notice("Chosen folder path does not exist in your vault");
       }
     }
 
@@ -606,7 +610,9 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Image name")
-      .setDesc("The value used to name a saved image. The name will have the datetime appended automatically")
+      .setDesc(
+        "The value used to name a saved image. The name will have the datetime appended automatically"
+      )
       .addText((text) =>
         text
           .setPlaceholder("Default name")
@@ -620,7 +626,7 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
     new Setting(containerEl)
       .setName("Folder path")
       .setDesc(
-        "The folder to save the image in. The default is the root of your vault '/'. If you do change it, leave out the first slash in front. e.g. To save the image in \"Attachments\", type in \"Attachments\" (no quotes)"
+        'The folder to save the image in. The default is the root of your vault \'/\'. If you do change it, leave out the first slash in front. e.g. To save the image in "Attachments", type in "Attachments" (no quotes)'
       )
       .addText((text) =>
         text
