@@ -12,6 +12,7 @@ export function hslToHex(h: number, s: number, l: number) {
   };
   return `#${f(0)}${f(8)}${f(4)}`;
 }
+
 export function hexToHSL(hex: string) {
   var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 
@@ -53,6 +54,7 @@ export function hexToHSL(hex: string) {
 
   return [h, s, l];
 }
+
 export function convertDataURIToBinary(dataURI: string) {
   const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
   const base64: string = dataURI.substring(base64Index);
@@ -64,6 +66,7 @@ export function convertDataURIToBinary(dataURI: string) {
   }
   return array;
 }
+
 export function sumRows(array: number[][]) {
   const result: number[] = [];
   array.forEach((row, i) => {

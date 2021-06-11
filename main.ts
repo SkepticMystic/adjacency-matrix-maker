@@ -21,11 +21,15 @@ import {
 interface AdjacencyMatrixMakerPluginSettings {
   mainColourComponents: number[];
   backgroundColour: string;
+  imgName: string;
+  // folderPath: string
 }
 
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   mainColourComponents: [202, 72, 44],
   backgroundColour: "#141414",
+  imgName: "adj",
+  // folderPath: "/"
 };
 
 async function drawAdjAsImage(
@@ -146,7 +150,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       this.settings
     );
 
-    new MatrixModal(this.app, img, files, scale, adjArray).open();
+    new MatrixModal(this.app, img, files, scale, adjArray, this.settings).open();
   };
 
   onunload() {
@@ -167,19 +171,22 @@ class MatrixModal extends Modal {
   private files: TFile[];
   private scale: number;
   private adjArray: number[][];
+  private settings: AdjacencyMatrixMakerPluginSettings;
 
   constructor(
     app: App,
     img: HTMLImageElement,
     files: TFile[],
     scale: number,
-    adjArray: number[][]
+    adjArray: number[][],
+    settings: AdjacencyMatrixMakerPluginSettings
   ) {
     super(app);
     this.img = img;
     this.files = files;
     this.scale = scale;
     this.adjArray = adjArray;
+    this.settings = settings;
   }
 
   interval: NodeJS.Timeout;
@@ -191,14 +198,15 @@ class MatrixModal extends Modal {
     const scale = this.scale;
     const files = this.files;
     const adjArray = this.adjArray;
+    const settings = this.settings;
 
     // Add the canvas to the modal
     let { contentEl } = this;
 
     contentEl.style.height = `${Math.round(screen.height / 1.5)}px`;
 
-    // const vaultName: string = app.vault.adapter.basePath.match(/\\([^\\]+$)/g);
-    // contentEl.createEl("h2", { text: "Adjacency matrix" });
+    const vaultName: string = app.vault.getName();
+    contentEl.createEl("h2", { text: `Adjacency matrix of: ${vaultName}` });
 
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
 
@@ -510,9 +518,16 @@ class MatrixModal extends Modal {
 
       // Add the current datetime to the image name
       const now = window.moment().format("YYYYMMDDHHmmSS");
+
+      // Image name from settings
+      const imgName = settings.imgName;
+
+      // Folder path to save img
+      // const folderPath = settings.folderPath
+
       // Save image to root
       /// This could be improved to let the user choose the path
-      app.vault.createBinary(`/adj ${now}.png`, arrBuff);
+      app.vault.createBinary(`/${imgName} ${now}.png`, arrBuff);
       new Notice("Image saved");
     }
 
@@ -577,22 +592,17 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
         (this.plugin.settings.backgroundColour = backgroundColourPicker.value)
     );
 
-    // new Setting(containerEl)
-    //   .setName("Background colour light")
-    //   .setDesc("Light of the background colour")
-    //   .addSlider((slider) =>
-    //     slider
-    //       .setLimits(0, 100, 1)
-    //       .setValue(this.plugin.settings.backgroundColourLight)
-    //       .onChange((value) => {
-    //         this.plugin.settings.backgroundColourLight = value;
-    //         this.plugin.saveData(this.plugin.settings);
-    //         backgroundColourPicker.value = hslToHex(
-    //           this.plugin.settings.backgroundColourHue,
-    //           this.plugin.settings.backgroundColourSat,
-    //           value
-    //         );
-    //       })
-    //   );
+    new Setting(containerEl)
+      .setName("Image name")
+      .setDesc("The value used to name a saved image. The default is 'adj'")
+      .addText((text) =>
+        text
+          .setPlaceholder("adj")
+          .setValue(this.plugin.settings.imgName)
+          .onChange(async (value) => {
+            this.plugin.settings.imgName = value;
+            await this.plugin.saveSettings();
+          })
+      );
   }
 }
