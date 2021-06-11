@@ -11,76 +11,37 @@ import {
   Workspace,
   WorkspaceLeaf,
 } from "obsidian";
+import {
+  normalise,
+  sumRows,
+  convertDataURIToBinary,
+  hslToHex,
+  hexToHSL,
+} from "./utility";
 interface AdjacencyMatrixMakerPluginSettings {
-  mainColourHue: number;
-  mainColourSat: number;
-  mainColourLight: number;
-  backgroundColourHue: number;
-  backgroundColourSat: number;
-  backgroundColourLight: number;
+  mainColourComponents: number[];
+  backgroundColour: string;
 }
 
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
-  mainColourHue: 214,
-  mainColourSat: 84,
-  mainColourLight: 57,
-  backgroundColourHue: 20,
-  backgroundColourSat: 17,
-  backgroundColourLight: 3,
+  mainColourComponents: [202, 72, 44],
+  backgroundColour: "#141414",
 };
-
-// Functions
-/// Source: https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
-function hslToHex(h: number, s: number, l: number) {
-  l /= 100;
-  const a = (s * Math.min(l, 1 - l)) / 100;
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color)
-      .toString(16)
-      .padStart(2, "0"); // convert to Hex and prefix "0" if needed
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-function convertDataURIToBinary(dataURI: string) {
-  const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
-  const base64: string = dataURI.substring(base64Index);
-  const raw = window.atob(base64);
-  const rawLength = raw.length;
-  let array = new Uint8Array(new ArrayBuffer(rawLength));
-  for (let i = 0; i < rawLength; i++) {
-    array[i] = raw.charCodeAt(i);
-  }
-  return array;
-}
-
-function sumRows(array: number[][]) {
-  const result: number[] = [];
-  array.forEach((row, i) => {
-    row.reduce((a, b) => (result[i] = a + b));
-  });
-  return result;
-}
-
-function normalise(array: number[]) {
-  const max = Math.max(...array);
-  return array.map((x) => x / max);
-}
 
 async function drawAdjAsImage(
   scale: number,
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
-  colours: number[]
+  settings: AdjacencyMatrixMakerPluginSettings
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
   canvas.width = size * scale;
   canvas.height = canvas.height;
-  const [bgH, bgS, bgL, mnH, mnS, mnL] = colours;
+
+  const mnComp = settings.mainColourComponents;
+  const bgColour = settings.backgroundColour;
 
   for (let i = 0; i < size; i++) {
     // Where the alpha of that row is proportional to the number of coloured cells in that row
@@ -95,9 +56,9 @@ async function drawAdjAsImage(
 
       // Change colour if the two notes are linked
       if (adjArray[i][j] === 0) {
-        cellColour = `hsl(${bgH}, ${bgS}%, ${bgL}%)`;
+        cellColour = bgColour;
       } else {
-        cellColour = `hsla(${mnH}, ${mnS}%, ${mnL}%, ${alpha})`;
+        cellColour = `hsla(${mnComp[0]}, ${mnComp[1]}%, ${mnComp[2]}%, ${alpha})`;
       }
 
       // Draw the cell
@@ -107,7 +68,7 @@ async function drawAdjAsImage(
     }
   }
   const img = new Image();
-  img.src = canvas.toDataURL('image/svg');
+  img.src = canvas.toDataURL("image/svg");
   return img;
 }
 
@@ -124,16 +85,20 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       `<path fill="currentColor" stroke="currentColor" d="M8,8v84h84v-6H80V74h-6V62h6v-6H68V44H38V32h6v-6h12v6h-6v6h12v-6h18V20h12v-6h-6V8h-6v6h-6V8h-6v6h-6V8h-6v12h-6V8h-6v12 h-6v6h-6v12H20v6h12v6h-6v6h12v-6h24v24h6v6h6v6H62V74h-6v6H44v6h-6v-6H26v6H14V38h6V20h-6V8L8,8z M20,20h6V8h-6V20z M56,74v-6h-6 v6H56z M26,56h-6v6h6V56z M68,44h6v6h6v6h12v-6h-6v-6h6v-6H68L68,44z M80,62v12h6v-6h6v-6H80z M86,74v6h6v-6H86z M32,8v6h6V8L32,8 z M62,20h6v6h-6V20z M86,26v6h6v-6H86z M50,56v6h6v-6H50z M38,62v6h-6v6h12V62H38z M20,68v6h6v-6H20z"/>`
     );
     this.addRibbonIcon("matrix", "Adjacency Matrix", () =>
-      this.makeAdjacencyMatrix(this.settings)
+      this.makeAdjacencyMatrix()
     );
 
     this.addCommand({
       id: "adjacency-matrix",
       name: "Open Adjacency Matrix",
-      callback: () => this.makeAdjacencyMatrix(this.settings),
+      callback: () => this.makeAdjacencyMatrix(),
     });
 
     this.addSettingTab(new AdjacencyMatrixMakerSettingTab(this.app, this));
+
+    // Hacky method to fixing the backgroundColourPicker problem
+    /// It wouldn't show the default colour as it's value onLoad, but this makes it
+    this.settings.backgroundColour = "#201e1e";
   }
 
   // Does `from` have a link going to `to`?
@@ -158,11 +123,11 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     return adjArray;
   }
 
-  makeAdjacencyMatrix = async (
-    settings: AdjacencyMatrixMakerPluginSettings
-  ) => {
+  makeAdjacencyMatrix = async () => {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
     const size = files.length;
+
+    // Todo: should just be able to slot in a check for settings.userScale ? settings.userScale : ...
     const scale = size < 50 ? 16 : size < 100 ? 8 : size < 200 ? 4 : 2;
 
     // Canvas setup
@@ -173,16 +138,13 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const adjArray = this.populateAdjacencyMatrixArr(files);
     const alphas = normalise(sumRows(adjArray));
 
-    const colours = [
-      settings.backgroundColourHue,
-      settings.backgroundColourSat,
-      settings.backgroundColourLight,
-      settings.mainColourHue,
-      settings.mainColourSat,
-      settings.mainColourLight,
-    ];
-
-    const img = await drawAdjAsImage(scale, alphas, adjArray, canvas, colours);
+    const img = await drawAdjAsImage(
+      scale,
+      alphas,
+      adjArray,
+      canvas,
+      this.settings
+    );
 
     new MatrixModal(this.app, img, files, scale, adjArray).open();
   };
@@ -489,6 +451,8 @@ class MatrixModal extends Modal {
     function handleTooltip(e: MouseEvent) {
       const x = e.offsetX;
       const y = e.offsetY;
+
+      // Todo check that the mouse is inside the canvas first
       const realx = mouse.rx;
       const realy = mouse.ry;
 
@@ -538,13 +502,6 @@ class MatrixModal extends Modal {
     canvas.addEventListener("click", openClickedCellAsFile);
 
     resetScaleButton.addEventListener("click", () => {
-      // displayTransform.x = 0;
-      // displayTransform.y = 0;
-      // displayTransform.scale = 1;
-      // displayTransform.rotate = 0;
-      // displayTransform.ox = 0;
-      // displayTransform.oy = 0;
-
       displayTransform.scale = initialScale;
     });
 
@@ -583,9 +540,6 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", {
       text: "Settings for Adjacency Matrix Maker",
     });
-    containerEl.createEl("p", {
-      text: "You currently can't use the colour pickers to actually choose the colours. It is just to show the result.",
-    });
 
     const coloursDiv = containerEl.createDiv();
 
@@ -595,11 +549,16 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
       text: "Main colour",
     });
     const mainColourPicker = mainColourDiv.createEl("input", { type: "color" });
-    // Update value based on chosen slider settings
+
     mainColourPicker.value = hslToHex(
-      this.plugin.settings.mainColourHue,
-      this.plugin.settings.mainColourSat,
-      this.plugin.settings.mainColourLight
+      ...this.plugin.settings.mainColourComponents
+    );
+    mainColourPicker.addEventListener(
+      "change",
+      () =>
+        (this.plugin.settings.mainColourComponents = hexToHSL(
+          mainColourPicker.value
+        ))
     );
 
     // Background colour picker
@@ -610,119 +569,30 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
     const backgroundColourPicker = backgroundColourDiv.createEl("input", {
       type: "color",
     });
-    backgroundColourPicker.value = hslToHex(
-      this.plugin.settings.backgroundColourHue,
-      this.plugin.settings.backgroundColourSat,
-      this.plugin.settings.backgroundColourLight
+
+    backgroundColourPicker.value = this.plugin.settings.backgroundColour;
+    backgroundColourPicker.addEventListener(
+      "change",
+      () =>
+        (this.plugin.settings.backgroundColour = backgroundColourPicker.value)
     );
 
-    new Setting(containerEl)
-      .setName("Main colour hue")
-      .setDesc("Hue of the colour to use when two notes are linked")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 360, 1)
-          .setValue(this.plugin.settings.mainColourHue)
-          .onChange((value) => {
-            this.plugin.settings.mainColourHue = value;
-            this.plugin.saveData(this.plugin.settings);
-            mainColourPicker.value = hslToHex(
-              value,
-              this.plugin.settings.mainColourSat,
-              this.plugin.settings.mainColourLight
-            );
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Main colour saturation")
-      .setDesc("Saturation of the colour to use when two notes are linked")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.mainColourSat)
-          .onChange((value) => {
-            this.plugin.settings.mainColourSat = value;
-            this.plugin.saveData(this.plugin.settings);
-            mainColourPicker.value = hslToHex(
-              this.plugin.settings.mainColourHue,
-              value,
-              this.plugin.settings.mainColourLight
-            );
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Main colour light")
-      .setDesc("Light of the colour to use when two notes are linked")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.mainColourLight)
-          .onChange((value) => {
-            this.plugin.settings.mainColourLight = value;
-            this.plugin.saveData(this.plugin.settings);
-            mainColourPicker.value = hslToHex(
-              this.plugin.settings.mainColourHue,
-              this.plugin.settings.mainColourSat,
-              value
-            );
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Background colour hue")
-      .setDesc("Hue of the background colour")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 360, 1)
-          .setValue(this.plugin.settings.backgroundColourHue)
-          .onChange((value) => {
-            console.log(value);
-            this.plugin.settings.backgroundColourHue = value;
-            this.plugin.saveData(this.plugin.settings);
-            backgroundColourPicker.value = hslToHex(
-              value,
-              this.plugin.settings.backgroundColourSat,
-              this.plugin.settings.backgroundColourLight
-            );
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Background colour saturation")
-      .setDesc("Saturation of the background colour")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.backgroundColourSat)
-          .onChange((value) => {
-            this.plugin.settings.backgroundColourSat = value;
-            this.plugin.saveData(this.plugin.settings);
-            backgroundColourPicker.value = hslToHex(
-              this.plugin.settings.backgroundColourHue,
-              value,
-              this.plugin.settings.backgroundColourLight
-            );
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Background colour light")
-      .setDesc("Light of the background colour")
-      .addSlider((slider) =>
-        slider
-          .setLimits(0, 100, 1)
-          .setValue(this.plugin.settings.backgroundColourLight)
-          .onChange((value) => {
-            this.plugin.settings.backgroundColourLight = value;
-            this.plugin.saveData(this.plugin.settings);
-            backgroundColourPicker.value = hslToHex(
-              this.plugin.settings.backgroundColourHue,
-              this.plugin.settings.backgroundColourSat,
-              value
-            );
-          })
-      );
+    // new Setting(containerEl)
+    //   .setName("Background colour light")
+    //   .setDesc("Light of the background colour")
+    //   .addSlider((slider) =>
+    //     slider
+    //       .setLimits(0, 100, 1)
+    //       .setValue(this.plugin.settings.backgroundColourLight)
+    //       .onChange((value) => {
+    //         this.plugin.settings.backgroundColourLight = value;
+    //         this.plugin.saveData(this.plugin.settings);
+    //         backgroundColourPicker.value = hslToHex(
+    //           this.plugin.settings.backgroundColourHue,
+    //           this.plugin.settings.backgroundColourSat,
+    //           value
+    //         );
+    //       })
+    //   );
   }
 }
