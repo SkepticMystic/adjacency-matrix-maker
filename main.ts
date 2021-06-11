@@ -8,6 +8,8 @@ import {
   PluginSettingTab,
   Setting,
   TFile,
+  TFolder,
+  TAbstractFile,
   Workspace,
   WorkspaceLeaf,
 } from "obsidian";
@@ -22,14 +24,14 @@ interface AdjacencyMatrixMakerPluginSettings {
   mainColourComponents: number[];
   backgroundColour: string;
   imgName: string;
-  // folderPath: string
+  folderPath: string;
 }
 
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   mainColourComponents: [202, 72, 44],
   backgroundColour: "#141414",
   imgName: "adj",
-  // folderPath: "/"
+  folderPath: "/",
 };
 
 async function drawAdjAsImage(
@@ -150,7 +152,14 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       this.settings
     );
 
-    new MatrixModal(this.app, img, files, scale, adjArray, this.settings).open();
+    new MatrixModal(
+      this.app,
+      img,
+      files,
+      scale,
+      adjArray,
+      this.settings
+    ).open();
   };
 
   onunload() {
@@ -517,18 +526,21 @@ class MatrixModal extends Modal {
       const arrBuff = convertDataURIToBinary(img.src);
 
       // Add the current datetime to the image name
-      const now = window.moment().format("YYYYMMDDHHmmSS");
+      const now = window.moment().format("YYYYMMDD HHmmss");
 
       // Image name from settings
       const imgName = settings.imgName;
 
       // Folder path to save img
-      // const folderPath = settings.folderPath
+      const folderPath = settings.folderPath === '' ? '/' : settings.folderPath;
+      const abstractFile = app.vault.getAbstractFileByPath(folderPath);
 
-      // Save image to root
-      /// This could be improved to let the user choose the path
-      app.vault.createBinary(`/${imgName} ${now}.png`, arrBuff);
-      new Notice("Image saved");
+      if (abstractFile && abstractFile instanceof TFolder) {
+        app.vault.createBinary(`${folderPath}/${imgName} ${now}.png`, arrBuff);
+        new Notice("Image saved");
+      } else {
+        new Notice('Chosen folder path does not exist in your vault')
+      }
     }
 
     saveImageButton.addEventListener("click", saveCanvasAsImage);
@@ -594,13 +606,28 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Image name")
-      .setDesc("The value used to name a saved image. The default is 'adj'")
+      .setDesc("The value used to name a saved image. The name will have the datetime appended automatically")
       .addText((text) =>
         text
-          .setPlaceholder("adj")
+          .setPlaceholder("Default name")
           .setValue(this.plugin.settings.imgName)
           .onChange(async (value) => {
             this.plugin.settings.imgName = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(containerEl)
+      .setName("Folder path")
+      .setDesc(
+        "The folder to save the image in. The default is the root of your vault '/'. If you do change it, leave out the first slash in front. e.g. To save the image in \"Attachments\", type in \"Attachments\" (no quotes)"
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("/")
+          .setValue(this.plugin.settings.folderPath)
+          .onChange(async (value) => {
+            this.plugin.settings.folderPath = value;
             await this.plugin.saveSettings();
           })
       );
