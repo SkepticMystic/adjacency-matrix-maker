@@ -109,23 +109,12 @@ function indexOfFolderChanges(files: TFile[]) {
   // Get the first-level folder of all files
   const firstFolders = files
     .map((file) => file.path.match(/[^\/]+/)[0])
-    .map((firstFolder) => {
-      // Returning '/' if that file is in the root folder
-      if (firstFolder.includes(".md")) {
-        return "/";
-      } else {
-        return firstFolder;
-      }
-    });
+    .map((firstFolder) => firstFolder.includes(".md") ? '/' : firstFolder);
 
   // Mark the index at which a new run/streak starts
-  const newValueAt = [0];
-  for (let i = 1; i < files.length; i++) {
-    if (firstFolders[i] !== firstFolders[i - 1]) {
-      newValueAt.push(i);
-    }
-  }
-  return newValueAt;
+  return [...new Set(firstFolders)].map((item) =>
+    firstFolders.indexOf(item)
+  );
 }
 
 export default class AdjacencyMatrixMakerPlugin extends Plugin {
@@ -193,8 +182,9 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const alphas = normalise(sumRows(adjArray));
 
     // Determine where folder changes
-    const folderChangeIndices = this.settings.showFolders ? indexOfFolderChanges(files) : [];
-    
+    const folderChangeIndices = this.settings.showFolders
+      ? indexOfFolderChanges(files)
+      : [];
 
     const img = await drawAdjAsImage(
       scale,
