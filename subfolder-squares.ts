@@ -10,7 +10,6 @@ class MyPlugin extends Plugin {
       path.match(/(.+)\//) ? path.match(/(.+)\//)[1] : "/"
     );
 
-
     // This seems to be promising, but needs some work
     /// The transission from 21 to 22 is 'different', which is technically correct, but doesn't capture the level of the change
     /// 21: "Logic/Propositional Logic/With another"
@@ -21,20 +20,55 @@ class MyPlugin extends Plugin {
     /// "Logic/Propositional Logic/Extra Prop"
     /// Are also 'different', but the second more so than the first
 
-    let changeArr = [];
+    interface ChangeItem {
+      fileNo: number;
+      nextDesc: string;
+      curLevel: number;
+      deltaLevel: number;
+    }
+
+    interface ChangeItemArr extends Array<ChangeItem> {}
+
+    // Just keep in mind that changeArr is one item less than files.length
+    /// There is enough information to tell what happens with the last file, but just keep this in mind
+
+    let changeArr: ChangeItemArr;
     for (let i = 0; i < fullFolders.length - 1; i++) {
+      const currentFolder =
+        fullFolders[i] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i] + "/";
+      const nextFolder =
+        fullFolders[i + 1] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i + 1] + "/";
+      const currentLevel = (currentFolder.match(/\//g) || []).length;
+      const nextLevel = (nextFolder.match(/\//g) || []).length;
 
-      const current = fullFolders[i] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i] + "/";
-      const next = fullFolders[i + 1] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i + 1] + "/";
-
-      if (current === next) {
-        changeArr.push("same");
-      } else if (current.includes(next)) {
-        changeArr.push("shallower");
-      } else if (next.includes(current)) {
-        changeArr.push("deeper");
+      if (currentFolder === nextFolder) {
+        changeArr.push({
+          fileNo: i,
+          nextDesc: "same",
+          curLevel: currentLevel,
+          deltaLevel: nextLevel - currentLevel,
+        });
+      } else if (currentFolder.includes(nextFolder)) {
+        changeArr.push({
+          fileNo: i,
+          nextDesc: "shallower",
+          curLevel: currentLevel,
+          deltaLevel: nextLevel - currentLevel,
+        });
+      } else if (nextFolder.includes(currentFolder)) {
+        changeArr.push({
+          fileNo: i,
+          nextDesc: "deeper",
+          curLevel: currentLevel,
+          deltaLevel: nextLevel - currentLevel,
+        });
       } else {
-        changeArr.push("different");
+        changeArr.push({
+          fileNo: i,
+          nextDesc: "different",
+          curLevel: currentLevel,
+          deltaLevel: nextLevel - currentLevel,
+        });
       }
     }
 
