@@ -15,7 +15,7 @@ class MyPlugin extends Plugin {
 
     interface ChangeItem {
       fileNo: number;
-      nextDesc: string;
+      nextDesc: "same" | "deeper" | "shallower" | "different";
       curLevel: number;
       deltaLevel: number;
     }
@@ -65,8 +65,56 @@ class MyPlugin extends Plugin {
       }
     }
 
+    let minDepth = [];
 
-    let changeIndices = 
+    for (let i = 0; i < fullFolders.length - 1; i++) {
+      // const currentFolder =
+      //   fullFolders[i] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i] + "/";
+      // const nextFolder =
+      //   fullFolders[i + 1] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i + 1] + "/";
+
+      if (changeArr[i].nextDesc !== "different" && changeArr[i].curLevel >= 1) {
+        if (
+          changeArr[i].nextDesc !== "different" &&
+          changeArr[i].curLevel >= 2
+        ) {
+          if (
+            changeArr[i].nextDesc !== "different" &&
+            changeArr[i].curLevel >= 3
+          ) {
+            if (
+              changeArr[i].nextDesc !== "different" &&
+              changeArr[i].curLevel >= 4
+            ) {
+              if (
+                changeArr[i].nextDesc !== "different" &&
+                changeArr[i].curLevel >= 5
+              ) {
+                minDepth[i] = 5;
+              } else {
+                minDepth[i] = 4;
+              }
+            } else {
+              minDepth[i] = 3;
+            }
+          } else {
+            minDepth[i] = 2;
+          }
+        } else {
+          minDepth[i] = 1;
+        }
+      } else {
+        minDepth[i] = 0;
+      }
+    }
+
+    let newFolderIndices = [];
+    
+    for(let i = 0; i < minDepth.length - 1; i++) {
+      if(minDepth[i] < minDepth[i + 1]) {
+        newFolderIndices.push(i)
+      }
+    }
 
     // let level1Squares = [];
 
@@ -75,6 +123,25 @@ class MyPlugin extends Plugin {
     //     level1Squares.push();
     //   }
     // });
+
+    /// Nick.Harvey method:
+
+    function func1(arr: string[]) {
+      return [...new Set(arr)].map((item) => arr.indexOf(item));
+    }
+
+    function func2(arr: string[], depth: number) {
+      return func1(
+        arr.map((path) =>
+          path
+            .split("/")
+            .slice(0, depth + 1)
+            .join("/")
+        )
+      );
+    }
+
+    // [0, 1, 19, 20, 22, 34, 40, 58, 64, 68]
 
     /// Different approach:
 
