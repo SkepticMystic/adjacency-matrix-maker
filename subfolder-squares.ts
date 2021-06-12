@@ -6,19 +6,12 @@ class MyPlugin extends Plugin {
     let files = this.app.vault.getMarkdownFiles();
     let paths = files.map((file) => file.path);
 
-    const fullFolders = paths.map((path) =>
+    // This:
+    /// - drops the filename.md at the end
+    /// - Accounts for files in root of vault, changes them to '/'
+    let fullFolders = paths.map((path) =>
       path.match(/(.+)\//) ? path.match(/(.+)\//)[1] : "/"
     );
-
-    // This seems to be promising, but needs some work
-    /// The transission from 21 to 22 is 'different', which is technically correct, but doesn't capture the level of the change
-    /// 21: "Logic/Propositional Logic/With another"
-    /// 22: "Logic/Propositional Logic/Extra Prop"
-
-    /// "Logic/Quantifiers/For All"
-    /// And
-    /// "Logic/Propositional Logic/Extra Prop"
-    /// Are also 'different', but the second more so than the first
 
     interface ChangeItem {
       fileNo: number;
@@ -32,7 +25,7 @@ class MyPlugin extends Plugin {
     // Just keep in mind that changeArr is one item less than files.length
     /// There is enough information to tell what happens with the last file, but just keep this in mind
 
-    let changeArr: ChangeItemArr;
+    let changeArr: ChangeItemArr = [];
     for (let i = 0; i < fullFolders.length - 1; i++) {
       const currentFolder =
         fullFolders[i] === "/" ? "@@UNIQUE_ROOT" : fullFolders[i] + "/";
@@ -71,6 +64,17 @@ class MyPlugin extends Plugin {
         });
       }
     }
+
+
+    let changeIndices = 
+
+    // let level1Squares = [];
+
+    // changeArr.forEach((change, i) => {
+    //   while (change.curLevel >= 1 && change.nextDesc !== "different") {
+    //     level1Squares.push();
+    //   }
+    // });
 
     /// Different approach:
 
