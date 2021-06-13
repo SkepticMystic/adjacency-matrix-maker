@@ -13,6 +13,7 @@ import {
   Workspace,
   WorkspaceLeaf,
   parseFrontMatterEntry,
+  normalizePath,
 } from "obsidian";
 import {
   normalise,
@@ -22,7 +23,7 @@ import {
   hexToHSL,
 } from "./utility";
 interface AdjacencyMatrixMakerPluginSettings {
-  mainColourComponents: number[];
+  mainColourComponents: [number, number, number];
   backgroundColour: string;
   imgName: string;
   folderPath: string;
@@ -44,13 +45,82 @@ function validFolderPathQ(path: string) {
   return file && file instanceof TFolder;
 }
 
+//? Show subfolder squares
+interface square {
+  depth: number;
+  start: number;
+  end: number;
+}
+
+interface cutPath {
+  file: number;
+  cutPath: string;
+}
+
+function cutAtDepth(paths: string[], depth: number) {
+  const splitPaths = paths.map((path) => path.split("/").slice(1, -1));
+  const cutPaths: cutPath[] = splitPaths.map((path, i) => {
+    return path.length >= depth
+      ? {
+          file: i,
+          cutPath: path.slice(0, depth).join("/"),
+        }
+      : null;
+  });
+
+  return cutPaths.filter((item) => item !== null);
+}
+
+function squaresAtN(cutPaths: cutPath[], depth: number) {
+  const squares: square[] = [];
+  let start = cutPaths[0].file;
+
+  for (let i = 1; i < cutPaths.length - 1; i++) {
+    const prev = cutPaths[i - 1].cutPath;
+    const curr = cutPaths[i].cutPath;
+    const next = cutPaths[i + 1].cutPath;
+
+    if (prev !== curr) {
+      start = cutPaths[i].file;
+    }
+
+    if (curr !== next) {
+      squares.push({ depth, start, end: cutPaths[i].file });
+    }
+  }
+
+  return squares;
+}
+
+function allSquares(files: TFile[]) {
+  const paths = files.map((file) => file.path);
+
+  // This drops the filename.md at the end, and accounts for files in root of vault, changes them to '/'
+  const fullFolders = paths.map((path) =>
+    path.match(/(.+)\//) ? "/" + path.match(/(.+)\//)[1] + "/" : "/"
+  );
+
+  const maxDepth = Math.max(
+    ...fullFolders.map((path) => path.split("/").length - 2)
+  );
+
+  const allSquaresArr: square[][] = [];
+  for (let i = 1; i <= maxDepth; i++) {
+    allSquaresArr.push(squaresAtN(cutAtDepth(fullFolders, i), i));
+  }
+  return allSquaresArr;
+}
+
+//? End show subfolder squares
+
 async function drawAdjAsImage(
   scale: number,
   alphas: number[],
   adjArray: number[][],
   canvas: HTMLCanvasElement,
   settings: AdjacencyMatrixMakerPluginSettings,
-  folderChangeIndices: number[]
+  // folderChangeIndices: number[],
+  files: TFile[]
 ) {
   const ctx = canvas.getContext("2d");
   const size = alphas.length;
@@ -85,20 +155,103 @@ async function drawAdjAsImage(
     }
   }
 
-  // Add the folder squares if enabled
   if (settings.showFolders) {
-    folderChangeIndices.forEach((change, i) => {
-      ctx.strokeStyle = settings.folderSquaresColour;
-      const start = change * scale;
-      const sideLength = (folderChangeIndices[i + 1] - change) * scale;
-      ctx.strokeRect(start, start, sideLength, sideLength);
+    const squareArrs = allSquares(files);
+    squareArrs.forEach((squareArr, i) => {
+      if (squareArr[i]) {
+        switch (squareArr[i].depth) {
+          case 1:
+            ctx.strokeStyle = "red";
+            break;
+          case 2:
+            ctx.strokeStyle = "orange";
+            break;
+          case 3:
+            ctx.strokeStyle = "yellow";
+            break;
+          case 4:
+            ctx.strokeStyle = "green";
+            break;
+          case 5:
+            ctx.strokeStyle = "blue";
+            break;
+          case 6:
+            ctx.strokeStyle = "indigo";
+            break;
+          case 7:
+            ctx.strokeStyle = "purple";
+            break;
+
+          default:
+            ctx.strokeStyle = "white";
+            break;
+        }
+
+        squareArr.forEach((square) => {
+          const start = square.start * scale;
+          const sideLength = (square.end - square.start + 1) * scale;
+          ctx.strokeRect(start, start, sideLength, sideLength);
+        });
+      }
     });
 
-    // For the last square
-    const lastStart = folderChangeIndices.last() * scale;
-    const lastSideLength = canvas.width - lastStart;
-    ctx.strokeRect(lastStart, lastStart, lastSideLength, lastSideLength);
+    // Last squares
+    //! allSquares doesn't give the last square for each depth
+    //   const lastSquares = squareArrs.map((squareArr) => squareArr.last());
+    //   lastSquares.forEach((square, i) => {
+    //     if (square) {
+    //       switch (square.depth) {
+    //         case 1:
+    //           ctx.strokeStyle = "red";
+    //           break;
+    //         case 2:
+    //           ctx.strokeStyle = "orange";
+    //           break;
+    //         case 3:
+    //           ctx.strokeStyle = "yellow";
+    //           break;
+    //         case 4:
+    //           ctx.strokeStyle = "green";
+    //           break;
+    //         case 5:
+    //           ctx.strokeStyle = "blue";
+    //           break;
+    //         case 6:
+    //           ctx.strokeStyle = "indigo";
+    //           break;
+    //         case 7:
+    //           ctx.strokeStyle = "purple";
+    //           break;
+
+    //         default:
+    //           ctx.strokeStyle = "red";
+    //           break;
+    //       }
+    //       const lastStart = (square.end + 1) * scale;
+    //       const lastSideLength = canvas.width - lastStart;
+    //       console.log({
+    //         start: lastStart / scale,
+    //         length: lastSideLength / scale,
+    //       });
+    //       ctx.strokeRect(lastStart, lastStart, lastSideLength, lastSideLength);
+    //     }
+    //   });
   }
+
+  // Add the folder squares if enabled
+  // if (settings.showFolders) {
+  //   folderChangeIndices.forEach((change, i) => {
+  //     ctx.strokeStyle = settings.folderSquaresColour;
+  //     const start = change * scale;
+  //     const sideLength = (folderChangeIndices[i + 1] - change) * scale;
+  //     ctx.strokeRect(start, start, sideLength, sideLength);
+  //   });
+
+  //   // For the last square
+  //   const lastStart = folderChangeIndices.last() * scale;
+  //   const lastSideLength = canvas.width - lastStart;
+  //   ctx.strokeRect(lastStart, lastStart, lastSideLength, lastSideLength);
+  // }
 
   const img = new Image();
   img.src = canvas.toDataURL("image/svg");
@@ -128,6 +281,10 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       `<path fill="currentColor" stroke="currentColor" d="M8,8v84h84v-6H80V74h-6V62h6v-6H68V44H38V32h6v-6h12v6h-6v6h12v-6h18V20h12v-6h-6V8h-6v6h-6V8h-6v6h-6V8h-6v12h-6V8h-6v12 h-6v6h-6v12H20v6h12v6h-6v6h12v-6h24v24h6v6h6v6H62V74h-6v6H44v6h-6v-6H26v6H14V38h6V20h-6V8L8,8z M20,20h6V8h-6V20z M56,74v-6h-6 v6H56z M26,56h-6v6h6V56z M68,44h6v6h6v6h12v-6h-6v-6h6v-6H68L68,44z M80,62v12h6v-6h6v-6H80z M86,74v6h6v-6H86z M32,8v6h6V8L32,8 z M62,20h6v6h-6V20z M86,26v6h6v-6H86z M50,56v6h6v-6H50z M38,62v6h-6v6h12V62H38z M20,68v6h6v-6H20z"/>`
     );
     this.addRibbonIcon("matrix", "Adjacency Matrix", this.makeAdjacencyMatrix);
+
+    this.addRibbonIcon("dice", "Normalize Path", () => {
+      console.log(normalizePath("/"));
+    });
 
     this.addCommand({
       id: "adjacency-matrix",
@@ -186,7 +343,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       adjArray,
       canvas,
       this.settings,
-      folderChangeIndices
+      files
     );
 
     new MatrixModal(
