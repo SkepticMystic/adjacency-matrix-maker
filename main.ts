@@ -109,12 +109,10 @@ function indexOfFolderChanges(files: TFile[]) {
   // Get the first-level folder of all files
   const firstFolders = files
     .map((file) => file.path.match(/[^\/]+/)[0])
-    .map((firstFolder) => firstFolder.includes(".md") ? '/' : firstFolder);
+    .map((firstFolder) => (firstFolder.includes(".md") ? "/" : firstFolder));
 
   // Mark the index at which a new run/streak starts
-  return [...new Set(firstFolders)].map((item) =>
-    firstFolders.indexOf(item)
-  );
+  return [...new Set(firstFolders)].map((item) => firstFolders.indexOf(item));
 }
 
 export default class AdjacencyMatrixMakerPlugin extends Plugin {
@@ -138,10 +136,6 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     });
 
     this.addSettingTab(new AdjacencyMatrixMakerSettingTab(this.app, this));
-
-    // Hacky method to fixing the backgroundColourPicker problem
-    /// It wouldn't show the default colour as it's value onLoad, but this makes it
-    // this.settings.backgroundColour = "#201e1e";
   }
 
   // Does `from` have a link going to `to`?
