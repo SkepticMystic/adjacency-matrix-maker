@@ -169,7 +169,7 @@ async function drawAdjAsImage(
 
   if (settings.showFolders) {
     const squareArrs = allSquares(files);
-    console.log(squareArrs)
+    console.log(squareArrs);
     squareArrs.forEach((squareArr, i) => {
       if (squareArr[0]) {
         switch (squareArr[0].depth) {
@@ -208,9 +208,10 @@ async function drawAdjAsImage(
       }
     });
 
-  const img = new Image();
-  img.src = canvas.toDataURL("image/svg");
-  return img;
+    const img = new Image();
+    img.src = canvas.toDataURL("image/svg");
+    return img;
+  }
 }
 
 function indexOfFolderChanges(files: TFile[]) {
@@ -622,26 +623,28 @@ class MatrixModal extends Modal {
       const realx = mouse.rx;
       const realy = mouse.ry;
 
-      // Convert coord to cell number
-      const i = Math.round(realx / scale - 0.5);
-      const j = Math.round(realy / scale - 0.5);
+      if (realx >= 0) {
+        // Convert coord to cell number
+        const i = Math.round(realx / scale - 0.5);
+        const j = Math.round(realy / scale - 0.5);
 
-      // Pick the two files that cell refers to
-      const fileI = files[i];
-      const fileJ = files[j];
+        // Pick the two files that cell refers to
+        const fileI = files[i];
+        const fileJ = files[j];
 
-      // If hovering over linked notes, show tooltip, and move it there
-      if (adjArray[i][j] === 1) {
-        document.body.style.cursor = "pointer";
-        tooltip.addClass("show");
-        tooltip.style.transform = `translate(${x + 15}px, ${
-          y - canvas.height - 80
-        }px)`;
-        tooltipText.innerText = `${fileI.basename} → ${fileJ.basename}`;
-      } else {
-        document.body.style.cursor = "initial";
-        // Hide the tooltip
-        tooltip.removeClass("show");
+        // If hovering over linked notes, show tooltip, and move it there
+        if (adjArray[i][j] === 1) {
+          document.body.style.cursor = "pointer";
+          tooltip.addClass("show");
+          tooltip.style.transform = `translate(${x + 15}px, ${
+            y - canvas.height - 80
+          }px)`;
+          tooltipText.innerText = `${fileI.basename} → ${fileJ.basename}`;
+        } else {
+          document.body.style.cursor = "initial";
+          // Hide the tooltip
+          tooltip.removeClass("show");
+        }
       }
     }
 
