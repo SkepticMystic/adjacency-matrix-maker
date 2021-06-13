@@ -1,4 +1,4 @@
-import { App } from "obsidian";
+import { App, normalizePath } from "obsidian";
 
 class MyPlugin extends Plugin {
   app: App;
@@ -10,8 +10,100 @@ class MyPlugin extends Plugin {
     /// - drops the filename.md at the end
     /// - Accounts for files in root of vault, changes them to '/'
     let fullFolders = paths.map((path) =>
-      path.match(/(.+)\//) ? path.match(/(.+)\//)[1] : "/"
+      path.match(/(.+)\//) ? "/" + path.match(/(.+)\//)[1] + "/" : "/"
     );
+
+    //? Different approach
+
+    interface square {
+      depth: number;
+      start: number;
+      end?: number;
+    }
+
+    interface cutPath {
+      file: number;
+      cutPath: string;
+    }
+
+    function cutAtDepth(paths: string[], depth: number) {
+      const splitPaths = paths.map((path) => path.split("/").slice(1, -1));
+      const len = depth;
+      const cutPaths: cutPath[] = splitPaths.map((path, i) => {
+        return path.length >= len
+          ? {
+              file: i,
+              cutPath: path.slice(0, len).join("/"),
+            }
+          : null;
+      });
+
+      return cutPaths.filter((item) => item !== null);
+    }
+
+    function squaresAtN(cutPaths: cutPath[], depth: number) {
+      const squares: square[] = [];
+      let start = cutPaths[0].file;
+
+      for (let i = 1; i < cutPaths.length - 1; i++) {
+        let end;
+
+        const prev = cutPaths[i - 1].cutPath;
+        const curr = cutPaths[i].cutPath;
+        const next = cutPaths[i + 1].cutPath;
+
+        if (prev !== curr) {
+          start = cutPaths[i].file;
+        }
+
+        if (curr !== next) {
+          squares.push({ depth, start, end: cutPaths[i].file });
+        }
+      }
+
+      return squares;
+    }
+
+    function allSquares() {
+      const maxDepth = Math.max(
+        ...fullFolders.map((path) => path.split("/").length - 2)
+      );
+
+      const allSquaresArr: square[][] = [];
+      for (let i = 1; i <= maxDepth; i++) {
+        allSquaresArr.push(squaresAtN(cutAtDepth(fullFolders, i), i));
+      }
+      return allSquaresArr;
+    }
+
+    // function levelNSquares(cutPaths: cutPath[], depth: number) {
+    //   const squares: square[] = [];
+    //   for (let i = 1; i < cutPaths.length - 1; i++) {
+    //     if (cutPaths[i - 1].cutPath !== cutPaths[i].cutPath) {
+    //       squares.push({
+    //         depth,
+    //         start: i,
+    //       });
+    //     }
+
+    //     if (cutPaths[i].cutPath !== cutPaths[i + 1].cutPath) {
+    //       if (squares.length === 0) {
+    //         squares.push({ depth, start: 0, end: i });
+    //       }
+    //       squares.last().end = i;
+    //     }
+    //   }
+
+    //   squares.last().end = cutPaths.last().file;
+
+    //   if (squares[0].start === 1) {
+    //     squares.push({ depth, start: 0, end: 0 });
+    //   }
+
+    //   return squares;
+    // }
+
+    //? End
 
     interface ChangeItem {
       fileNo: number;
@@ -109,10 +201,10 @@ class MyPlugin extends Plugin {
     }
 
     let newFolderIndices = [];
-    
-    for(let i = 0; i < minDepth.length - 1; i++) {
-      if(minDepth[i] < minDepth[i + 1]) {
-        newFolderIndices.push(i)
+
+    for (let i = 0; i < minDepth.length - 1; i++) {
+      if (minDepth[i] < minDepth[i + 1]) {
+        newFolderIndices.push(i);
       }
     }
 
