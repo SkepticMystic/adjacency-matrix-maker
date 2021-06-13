@@ -133,7 +133,7 @@ async function drawAdjAsImage(
   for (let i = 0; i < size; i++) {
     // Where the alpha of that row is proportional to the number of coloured cells in that row
     /// Make the more "popular" notes pop
-    const alpha = alphas[i] / 1.5 + 0.33333333;
+    const alpha = alphas[i] / 1.2 + 0.166666666666;
 
     for (let j = 0; j < size; j++) {
       // Position of the top-left corner of the next pixel
