@@ -214,15 +214,15 @@ async function drawAdjAsImage(
   }
 }
 
-function indexOfFolderChanges(files: TFile[]) {
-  // Get the first-level folder of all files
-  const firstFolders = files
-    .map((file) => file.path.match(/[^\/]+/)[0])
-    .map((firstFolder) => (firstFolder.includes(".md") ? "/" : firstFolder));
+// function indexOfFolderChanges(files: TFile[]) {
+//   // Get the first-level folder of all files
+//   const firstFolders = files
+//     .map((file) => file.path.match(/[^\/]+/)[0])
+//     .map((firstFolder) => (firstFolder.includes(".md") ? "/" : firstFolder));
 
-  // Mark the index at which a new run/streak starts
-  return [...new Set(firstFolders)].map((item) => firstFolders.indexOf(item));
-}
+//   // Mark the index at which a new run/streak starts
+//   return [...new Set(firstFolders)].map((item) => firstFolders.indexOf(item));
+// }
 
 export default class AdjacencyMatrixMakerPlugin extends Plugin {
   settings: AdjacencyMatrixMakerPluginSettings;
@@ -237,10 +237,6 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
       `<path fill="currentColor" stroke="currentColor" d="M8,8v84h84v-6H80V74h-6V62h6v-6H68V44H38V32h6v-6h12v6h-6v6h12v-6h18V20h12v-6h-6V8h-6v6h-6V8h-6v6h-6V8h-6v12h-6V8h-6v12 h-6v6h-6v12H20v6h12v6h-6v6h12v-6h24v24h6v6h6v6H62V74h-6v6H44v6h-6v-6H26v6H14V38h6V20h-6V8L8,8z M20,20h6V8h-6V20z M56,74v-6h-6 v6H56z M26,56h-6v6h6V56z M68,44h6v6h6v6h12v-6h-6v-6h6v-6H68L68,44z M80,62v12h6v-6h6v-6H80z M86,74v6h6v-6H86z M32,8v6h6V8L32,8 z M62,20h6v6h-6V20z M86,26v6h6v-6H86z M50,56v6h6v-6H50z M38,62v6h-6v6h12V62H38z M20,68v6h6v-6H20z"/>`
     );
     this.addRibbonIcon("matrix", "Adjacency Matrix", this.makeAdjacencyMatrix);
-
-    this.addRibbonIcon("dice", "Normalize Path", () => {
-      console.log(allSquares(this.app.vault.getMarkdownFiles()));
-    });
 
     this.addCommand({
       id: "adjacency-matrix",
@@ -289,9 +285,9 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const alphas = normalise(sumRows(adjArray));
 
     // Determine where folder changes
-    const folderChangeIndices = this.settings.showFolders
-      ? indexOfFolderChanges(files)
-      : [];
+    // const folderChangeIndices = this.settings.showFolders
+    //   ? indexOfFolderChanges(files)
+    //   : [];
 
     const img = await drawAdjAsImage(
       scale,
@@ -409,7 +405,7 @@ class MatrixModal extends Modal {
       mouse.y = event.offsetY;
       // mouse.alt = event.altKey;
       // mouse.shift = event.shiftKey;
-      // mouse.ctrl = event.ctrlKey;
+      mouse.ctrl = event.ctrlKey;
       if (event.type === "mousedown") {
         event.preventDefault();
         mouse.buttonRaw |= mouse.buttons[event.which - 1];
@@ -602,12 +598,6 @@ class MatrixModal extends Modal {
 
       if (mouse.buttonRaw === 4) {
         // right click to return to home
-        // displayTransform.x = 0;
-        // displayTransform.y = 0;
-        // displayTransform.scale = 1;
-        // displayTransform.rotate = 0;
-        // displayTransform.ox = 0;
-        // displayTransform.oy = 0;
         displayTransform.scale = initialScale;
       }
     }
@@ -633,7 +623,7 @@ class MatrixModal extends Modal {
         const fileJ = files[j];
 
         // If hovering over linked notes, show tooltip, and move it there
-        if (adjArray[i][j] === 1) {
+        if (adjArray[i][j] === 1 || mouse.ctrl) {
           document.body.style.cursor = "pointer";
           tooltip.addClass("show");
           tooltip.style.transform = `translate(${x + 15}px, ${
