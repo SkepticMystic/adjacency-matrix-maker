@@ -369,6 +369,7 @@ class MatrixModal extends Modal {
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
     // SECTION Zoom & Pan code
+    // SOURCE https://stackoverflow.com/questions/33925012/how-to-pan-the-canvas
 
     // ANCHOR `mouse`
     const mouse = {

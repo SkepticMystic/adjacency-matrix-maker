@@ -1,5 +1,4 @@
-// Functions
-/// Source: https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
+// SOURCE https://stackoverflow.com/questions/36721830/convert-hsl-to-rgb-and-hex
 export function hslToHex(h: number, s: number, l: number) {
   l /= 100;
   const a = (s * Math.min(l, 1 - l)) / 100;
@@ -13,6 +12,7 @@ export function hslToHex(h: number, s: number, l: number) {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
+// SOURCE https://stackoverflow.com/questions/46432335/hex-to-hsl-convert-javascript
 export function hexToHSL(hex: string): [number, number, number] {
   var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
 
@@ -55,6 +55,7 @@ export function hexToHSL(hex: string): [number, number, number] {
   return [h, s, l];
 }
 
+// SOURCE https://gist.github.com/borismus/1032746
 export function convertDataURIToBinary(dataURI: string) {
   const base64Index: number = dataURI.indexOf(";base64,") + ";base64,".length;
   const base64: string = dataURI.substring(base64Index);
