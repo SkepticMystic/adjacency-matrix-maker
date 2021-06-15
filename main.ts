@@ -261,7 +261,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const size = files.length;
 
     // TODO: should just be able to slot in a check for settings.userScale ? settings.userScale
-    const scale: number = Number.isInteger(this.settings.userScale)
+    const scale: number = Number.isInteger(this.settings.userScale) && Number(this.settings.userScale) >=1
       ? Number(this.settings.userScale)
       : size < 50
       ? 16
@@ -278,11 +278,6 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
 
     const adjArray = this.populateAdjacencyMatrixArr(files);
     const alphas = normalise(sumRows(adjArray));
-
-    // Determine where folder changes
-    // const folderChangeIndices = this.settings.showFolders
-    //   ? indexOfFolderChanges(files)
-    //   : [];
 
     const img = await drawAdjAsImage(
       scale,
@@ -353,8 +348,14 @@ class MatrixModal extends Modal {
 
     // ANCHOR Setup Modal layout
     let { contentEl } = this;
+    const parentEl = contentEl.parentElement;
 
-    contentEl.style.height = `${Math.round(screen.height / 1.5)}px`;
+    parentEl.style.alignItems = 'stretch';
+    parentEl.style.margin = '50px';
+
+    contentEl.style.width = `${Math.round(screen.width / 1.5)}px`;
+    contentEl.style.height = `${Math.round(screen.height / 1.3)}px`;
+
 
     const vaultName: string = app.vault.getName();
     contentEl.createEl("h2", { text: `Adjacency matrix of: ${vaultName}` });
@@ -362,8 +363,8 @@ class MatrixModal extends Modal {
     const buttonRow = contentEl.createDiv({ cls: "matrixModalButtons" });
 
     const canvas = contentEl.createEl("canvas");
-    canvas.width = img.width;
-    canvas.height = img.height;
+    canvas.width = Math.round(screen.width / 1.5);
+    canvas.height = Math.round(screen.height / 1.3);
     const ctx = canvas.getContext("2d");
 
     // Save image button
@@ -783,14 +784,14 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
       );
 
     const initialScale =
-      this.plugin.settings.userScale === null
+      this.plugin.settings.userScale === 0
         ? ""
         : this.plugin.settings.userScale;
 
     new Setting(containerEl)
       .setName("Image Scale")
       .setDesc(
-        "The side length in pixels of each cell in the matrix. A larger scale will make for longer loading times, but a crisper image. The default value is determined by the number of files in your vault (More files = higher scale value)"
+        "The side length in pixels of each cell in the matrix. A larger scale will make for longer loading times, but a crisper image. The default value is determined by the number of files in your vault (More files = higher scale value). Leave blank to use the default."
       )
       .addText((text) =>
         text
@@ -798,8 +799,14 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
           .setValue(initialScale.toString())
           .onChange(async (newValue) => {
             const newScale = Number(newValue);
+            if(newValue === '') {
+              console.log(newValue)
+              this.plugin.settings.userScale = newScale;
+              await this.plugin.saveSettings();
+              return;
+            }
             if (!(Number.isInteger(newScale) && newScale >= 1)) {
-              new Notice("Timeout must be a number");
+              new Notice("Scale must be an integer greater than or equal to 1");
               return;
             }
             this.plugin.settings.userScale = newScale;
