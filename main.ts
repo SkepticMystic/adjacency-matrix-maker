@@ -321,6 +321,7 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
   }
 }
 
+// SECTION Matrix Modal
 class MatrixModal extends Modal {
   private img: HTMLImageElement;
   private files: TFile[];
@@ -355,7 +356,7 @@ class MatrixModal extends Modal {
     const adjArray = this.adjArray;
     const settings = this.settings;
 
-    // Add the canvas to the modal
+    // ANCHOR Setup Modal layout
     let { contentEl } = this;
 
     contentEl.style.height = `${Math.round(screen.height / 1.5)}px`;
@@ -382,7 +383,9 @@ class MatrixModal extends Modal {
     const tooltip = contentEl.createDiv({ cls: "adj-tooltip" });
     const tooltipText = tooltip.createSpan({ cls: "adj-tooltip-text" });
 
-    ////// Zoom & Pan code /////////
+    // SECTION Zoom & Pan code
+
+    // ANCHOR `mouse`
     const mouse = {
       x: 0,
       y: 0,
@@ -443,6 +446,9 @@ class MatrixModal extends Modal {
       1 / (img.width / contentEl.clientWidth),
       1 / (img.height / contentEl.clientHeight)
     );
+
+
+    // ANCHOR `displayTransform`
     // Real space, real, r (prefix) refers to the transformed canvas space.
     // c (prefix), chase is the value that chases a requiered value
     var displayTransform = {
@@ -481,7 +487,7 @@ class MatrixModal extends Modal {
       },
       updateValues: function () {
         // smooth all movement out. drag and accel control how this moves
-        // acceleration
+        /// acceleration
         this.dx += (this.x - this.cx) * this.accel;
         this.dy += (this.y - this.cy) * this.accel;
         this.dox += (this.ox - this.cox) * this.accel;
@@ -489,7 +495,7 @@ class MatrixModal extends Modal {
         this.dscale += (this.scale - this.cscale) * this.accel;
         // this.drotate += (this.rotate - this.crotate) * this.accel;
 
-        // drag
+        /// drag
         this.dx *= this.drag;
         this.dy *= this.drag;
         this.dox *= this.drag;
@@ -497,7 +503,7 @@ class MatrixModal extends Modal {
         this.dscale *= this.drag;
         // this.drotate *= this.drag;
 
-        // set the chase values. Chase chases the requiered values
+        /// set the chase values. Chase chases the requiered values
         this.cx += this.dx;
         this.cy += this.dy;
         this.cox += this.dox;
@@ -505,26 +511,26 @@ class MatrixModal extends Modal {
         this.cscale += this.dscale;
         // this.crotate += this.drotate;
 
-        // create the display matrix
+        /// create the display matrix
         this.matrix[0] = this.cscale;
         // this.matrix[1] = Math.sin(this.crotate) * this.cscale;
         // this.matrix[2] = -this.matrix[1];
         this.matrix[3] = this.matrix[0];
 
-        // set the coords relative to the origin
+        /// set the coords relative to the origin
         this.matrix[4] =
           -(this.cx * this.matrix[0] + this.cy * this.matrix[2]) + this.cox;
         this.matrix[5] =
           -(this.cx * this.matrix[1] + this.cy * this.matrix[3]) + this.coy;
 
-        // create invers matrix
+        /// create invers matrix
         let det = this.matrix[0] * this.matrix[3];
         this.invMatrix[0] = this.matrix[3] / det;
         // this.invMatrix[1] = -this.matrix[1] / det;
         // this.invMatrix[2] = -this.matrix[2] / det;
         this.invMatrix[3] = this.matrix[0] / det;
 
-        // check for mouse. Do controls and get real position of mouse.
+        /// check for mouse. Do controls and get real position of mouse.
         if (mouse !== undefined) {
           // if there is a mouse get the real cavas coordinates of the mouse
           if (mouse.oldX !== undefined && (mouse.buttonRaw & 1) === 1) {
@@ -604,6 +610,8 @@ class MatrixModal extends Modal {
 
     // update();
     this.interval = setInterval(update, 25);
+
+    // !SECTION Zoom & Pan code
 
     function handleTooltip(e: MouseEvent) {
       const x = e.offsetX;
@@ -694,6 +702,8 @@ class MatrixModal extends Modal {
   }
 }
 
+// !SECTION Matrix Modal
+// SECTION SettingsTab
 class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
   plugin: AdjacencyMatrixMakerPlugin;
 
@@ -709,6 +719,7 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
       text: "Settings for Adjacency Matrix Maker",
     });
 
+    // SECTION Custom settings
     const coloursDiv = containerEl.createDiv();
 
     // Main colour picker
@@ -759,6 +770,9 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
       await this.plugin.saveSettings();
     });
 
+    // !SECTION Custom settings
+    // SECTION Obsidian Settings
+
     new Setting(containerEl)
       .setName("Show folders")
       .setDesc("Add squares to the image showing which folder a note is in")
@@ -800,5 +814,7 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           })
       );
+    // !SECTION Obsidian Settings
   }
 }
+// !SECTION SettingsTab
