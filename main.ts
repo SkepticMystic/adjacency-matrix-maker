@@ -10,10 +10,6 @@ import {
   TFile,
   TFolder,
   TAbstractFile,
-  Workspace,
-  WorkspaceLeaf,
-  parseFrontMatterEntry,
-  normalizePath,
 } from "obsidian";
 import {
   normalise,
@@ -28,7 +24,6 @@ interface AdjacencyMatrixMakerPluginSettings {
   imgName: string;
   folderPath: string;
   showFolders: boolean;
-  folderSquaresColour: string;
 }
 
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
@@ -37,7 +32,6 @@ const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   imgName: "adj",
   folderPath: "/",
   showFolders: true,
-  folderSquaresColour: "#ffffff",
 };
 
 function validFolderPathQ(path: string) {
@@ -59,16 +53,17 @@ interface cutPath {
 
 function cutAtDepth(paths: string[], depth: number) {
   const splitPaths = paths.map((path) => path.split("/").slice(1, -1));
-  const cutPaths: cutPath[] = splitPaths.map((path, i) => {
-    return path.length >= depth
-      ? {
-          file: i,
-          cutPath: path.slice(0, depth).join("/"),
-        }
-      : null;
+  const cutPaths: cutPath[] = [];
+  splitPaths.forEach((path, i) => {
+    if (path.length >= depth) {
+      cutPaths.push({
+        file: i,
+        cutPath: path.slice(0, depth).join("/"),
+      });
+    }
   });
 
-  return cutPaths.filter((item) => item !== null);
+  return cutPaths;
 }
 
 function squaresAtN(cutPaths: cutPath[], depth: number) {
@@ -91,6 +86,7 @@ function squaresAtN(cutPaths: cutPath[], depth: number) {
 
   // Last square
   const lastSquarePath = cutPaths.last().cutPath;
+  // NOTE Return the file number of the first cutPath whose path matches the lastSquarePath
   const lastSquareStart = cutPaths.filter((path: cutPath) => {
     if (path.cutPath === lastSquarePath) {
       return true;
@@ -98,7 +94,6 @@ function squaresAtN(cutPaths: cutPath[], depth: number) {
       return false;
     }
   })[0].file;
-  // console.log(lastSquareStart);
 
   squares.push({ depth, start: lastSquareStart, end: cutPaths.last().file });
 
@@ -170,7 +165,7 @@ async function drawAdjAsImage(
   if (settings.showFolders) {
     const squareArrs = allSquares(files);
     console.log(squareArrs);
-    squareArrs.forEach((squareArr, i) => {
+    squareArrs.forEach((squareArr) => {
       if (squareArr[0]) {
         switch (squareArr[0].depth) {
           case 1:
@@ -207,22 +202,12 @@ async function drawAdjAsImage(
         });
       }
     });
-
-    const img = new Image();
-    img.src = canvas.toDataURL("image/svg");
-    return img;
   }
+
+  const img = new Image();
+  img.src = canvas.toDataURL("image/svg");
+  return img;
 }
-
-// function indexOfFolderChanges(files: TFile[]) {
-//   // Get the first-level folder of all files
-//   const firstFolders = files
-//     .map((file) => file.path.match(/[^\/]+/)[0])
-//     .map((firstFolder) => (firstFolder.includes(".md") ? "/" : firstFolder));
-
-//   // Mark the index at which a new run/streak starts
-//   return [...new Set(firstFolders)].map((item) => firstFolders.indexOf(item));
-// }
 
 export default class AdjacencyMatrixMakerPlugin extends Plugin {
   settings: AdjacencyMatrixMakerPluginSettings;
@@ -447,7 +432,6 @@ class MatrixModal extends Modal {
       1 / (img.height / contentEl.clientHeight)
     );
 
-
     // ANCHOR `displayTransform`
     // Real space, real, r (prefix) refers to the transformed canvas space.
     // c (prefix), chase is the value that chases a requiered value
@@ -513,15 +497,14 @@ class MatrixModal extends Modal {
 
         /// create the display matrix
         this.matrix[0] = this.cscale;
+        /// I don't use crotate, so these values will always be 0
         // this.matrix[1] = Math.sin(this.crotate) * this.cscale;
         // this.matrix[2] = -this.matrix[1];
         this.matrix[3] = this.matrix[0];
 
         /// set the coords relative to the origin
-        this.matrix[4] =
-          -(this.cx * this.matrix[0] + this.cy * this.matrix[2]) + this.cox;
-        this.matrix[5] =
-          -(this.cx * this.matrix[1] + this.cy * this.matrix[3]) + this.coy;
+        this.matrix[4] = -(this.cx * this.matrix[0]) + this.cox;
+        this.matrix[5] = -(this.cy * this.matrix[3]) + this.coy;
 
         /// create invers matrix
         let det = this.matrix[0] * this.matrix[3];
@@ -592,7 +575,6 @@ class MatrixModal extends Modal {
     };
 
     function update() {
-      // console.count("updating");
       // update the transform
       displayTransform.updateValues();
       // set home transform to clear the screem
@@ -613,6 +595,7 @@ class MatrixModal extends Modal {
 
     // !SECTION Zoom & Pan code
 
+    // ANCHOR Tooltip
     function handleTooltip(e: MouseEvent) {
       const x = e.offsetX;
       const y = e.offsetY;
@@ -648,6 +631,7 @@ class MatrixModal extends Modal {
 
     canvas.addEventListener("mousemove", debounce(handleTooltip, 25, true));
 
+    // ANCHOR OpenClickedCellAsFile
     async function openClickedCellAsFile() {
       const realx = mouse.rx;
       const realy = mouse.ry;
@@ -672,11 +656,13 @@ class MatrixModal extends Modal {
       displayTransform.scale = initialScale;
     });
 
+    // ANCHOR saveCanvasAsImage
     function saveCanvasAsImage() {
       const arrBuff = convertDataURIToBinary(img.src);
 
       // Add the current datetime to the image name
-      const now = window.moment().format("YYYYMMDD HHmmss");
+      /// TODO Allow customisable datetime format
+      const now = window.moment().format("YYYY-MM-DD HHmmss");
 
       // Image name from settings
       const imgName = settings.imgName;
@@ -754,21 +740,21 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
       await this.plugin.saveSettings();
     });
 
-    // Folder squares colour picker
-    const folderSquaresColourDiv = coloursDiv.createDiv();
-    folderSquaresColourDiv.createEl("h4", {
-      text: "Folder squares colour",
-    });
-    const folderSquaresColourPicker = folderSquaresColourDiv.createEl("input", {
-      type: "color",
-    });
+    // // Folder squares colour picker
+    // const folderSquaresColourDiv = coloursDiv.createDiv();
+    // folderSquaresColourDiv.createEl("h4", {
+    //   text: "Folder squares colour",
+    // });
+    // const folderSquaresColourPicker = folderSquaresColourDiv.createEl("input", {
+    //   type: "color",
+    // });
 
-    folderSquaresColourPicker.value = this.plugin.settings.folderSquaresColour;
-    folderSquaresColourPicker.addEventListener("change", async () => {
-      this.plugin.settings.folderSquaresColour =
-        folderSquaresColourPicker.value;
-      await this.plugin.saveSettings();
-    });
+    // folderSquaresColourPicker.value = this.plugin.settings.folderSquaresColour;
+    // folderSquaresColourPicker.addEventListener("change", async () => {
+    //   this.plugin.settings.folderSquaresColour =
+    //     folderSquaresColourPicker.value;
+    //   await this.plugin.saveSettings();
+    // });
 
     // !SECTION Custom settings
     // SECTION Obsidian Settings
