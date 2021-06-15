@@ -21,6 +21,7 @@ import {
 interface AdjacencyMatrixMakerPluginSettings {
   mainColourComponents: [number, number, number];
   backgroundColour: string;
+  userScale: number;
   imgName: string;
   folderPath: string;
   showFolders: boolean;
@@ -29,6 +30,7 @@ interface AdjacencyMatrixMakerPluginSettings {
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   mainColourComponents: [202, 72, 44],
   backgroundColour: "#141414",
+  userScale: undefined,
   imgName: "adj",
   folderPath: "/",
   showFolders: true,
@@ -258,8 +260,16 @@ export default class AdjacencyMatrixMakerPlugin extends Plugin {
     const files: TFile[] = this.app.vault.getMarkdownFiles();
     const size = files.length;
 
-    // Todo: should just be able to slot in a check for settings.userScale ? settings.userScale : ...
-    const scale = size < 50 ? 16 : size < 100 ? 8 : size < 200 ? 4 : 2;
+    // TODO: should just be able to slot in a check for settings.userScale ? settings.userScale
+    const scale: number = Number.isInteger(this.settings.userScale)
+      ? Number(this.settings.userScale)
+      : size < 50
+      ? 16
+      : size < 100
+      ? 8
+      : size < 200
+      ? 4
+      : 2;
 
     // Canvas setup
     const canvas = document.createElement("canvas");
@@ -768,6 +778,31 @@ class AdjacencyMatrixMakerSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.showFolders)
           .onChange(async (value) => {
             this.plugin.settings.showFolders = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    const initialScale =
+      this.plugin.settings.userScale === null
+        ? ""
+        : this.plugin.settings.userScale;
+
+    new Setting(containerEl)
+      .setName("Image Scale")
+      .setDesc(
+        "The side length in pixels of each cell in the matrix. A larger scale will make for longer loading times, but a crisper image. The default value is determined by the number of files in your vault (More files = higher scale value)"
+      )
+      .addText((text) =>
+        text
+          .setPlaceholder("Scale")
+          .setValue(initialScale.toString())
+          .onChange(async (newValue) => {
+            const newScale = Number(newValue);
+            if (!(Number.isInteger(newScale) && newScale >= 1)) {
+              new Notice("Timeout must be a number");
+              return;
+            }
+            this.plugin.settings.userScale = newScale;
             await this.plugin.saveSettings();
           })
       );
