@@ -12,9 +12,11 @@ Each row is a _node_ in your graph, and each cell is an _edge_.
 
 This graph conveys the same information as this adjacency matrix:
 
-![](Assets/small-graph.png)
+![](https://i.imgur.com/VZuvAhq.png)
 
-![](Assets/small-adj.png)
+
+![](https://i.imgur.com/glL4mGc.png)
+
 
 ## Functionality
 
