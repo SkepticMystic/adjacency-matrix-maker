@@ -27,7 +27,7 @@ interface AdjacencyMatrixMakerPluginSettings {
 const DEFAULT_SETTINGS: AdjacencyMatrixMakerPluginSettings = {
   mainColourComponents: [202, 72, 44],
   backgroundColour: "#141414",
-  userScale: undefined,
+  userScale: 0,
   imgName: "adj",
   folderPath: "/",
   showFolders: true,
@@ -38,7 +38,7 @@ function validFolderPathQ(path: string) {
   return file && file instanceof TFolder;
 }
 
-//? Show subfolder squares
+// SECTION Squares
 interface square {
   depth: number;
   start: number;
@@ -118,7 +118,7 @@ function allSquares(files: TFile[]) {
   return allSquaresArr;
 }
 
-//? End show subfolder squares
+// !SECTION Squares
 
 async function drawAdjAsImage(
   scale: number,
